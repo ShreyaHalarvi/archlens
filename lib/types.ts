@@ -3,6 +3,22 @@ export type RepositoryFile = {
   content: string;
 };
 
+export type AnalyzedFile = {
+  path: string;
+  language: string;
+  imports: string[];
+  internalImports: string[];
+  externalImports: string[];
+  layer: string;
+  isEntryPoint: boolean;
+};
+
+export type Dependency = {
+  source: string;
+  target: string;
+  type: "internal" | "external";
+};
+
 export type ArchitectureNode = {
   id: string;
   label: string;
@@ -62,10 +78,11 @@ export type Architecture = {
   nodes: ArchitectureNode[];
   edges: ArchitectureEdge[];
   summary: string;
-
   health?: ArchitectureHealth;
-
   risks?: ArchitectureRisk[];
-
   metrics?: ArchitectureMetrics;
+
+  // Detailed static-analysis evidence used by the Codebase Map.
+  files?: AnalyzedFile[];
+  dependencies?: Dependency[];
 };
