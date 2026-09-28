@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import mermaid from "mermaid";
 import type { Architecture } from "@/lib/types";
 
-type ViewMode = "system" | "dependencies" | "risks";
+type ViewMode =
+  | "system"
+  | "dependencies"
+  | "risks"
+  | "codebase";
 
 type ArchitectureGraphProps = {
   architecture: Architecture;
@@ -14,8 +18,12 @@ export default function ArchitectureGraph({
   architecture,
 }: ArchitectureGraphProps) {
   const graphRef = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState<ViewMode>("system");
-  const [renderError, setRenderError] = useState(false);
+
+  const [view, setView] =
+    useState<ViewMode>("system");
+
+  const [renderError, setRenderError] =
+    useState(false);
 
   useEffect(() => {
     if (!graphRef.current) return;
@@ -24,11 +32,28 @@ export default function ArchitectureGraph({
       startOnLoad: false,
       theme: "dark",
       securityLevel: "loose",
+
       flowchart: {
-        curve: view === "system" ? "basis" : "linear",
-        nodeSpacing: 100,
-        rankSpacing: 100,
-        padding: 30,
+        curve:
+          view === "system"
+            ? "basis"
+            : "linear",
+
+        nodeSpacing:
+          view === "codebase"
+            ? 45
+            : 100,
+
+        rankSpacing:
+          view === "codebase"
+            ? 65
+            : 100,
+
+        padding:
+          view === "codebase"
+            ? 20
+            : 30,
+
         htmlLabels: true,
       },
     });
@@ -38,16 +63,18 @@ export default function ArchitectureGraph({
 
       setRenderError(false);
 
-      const graphDefinition = createMermaidGraph(
-        architecture,
-        view
-      );
+      const graphDefinition =
+        createMermaidGraph(
+          architecture,
+          view
+        );
 
       try {
-        const { svg } = await mermaid.render(
-          `archlens-${Date.now()}`,
-          graphDefinition
-        );
+        const { svg } =
+          await mermaid.render(
+            `archlens-${Date.now()}`,
+            graphDefinition
+          );
 
         if (!graphRef.current) return;
 
@@ -60,10 +87,22 @@ export default function ArchitectureGraph({
           svgElement.style.maxWidth = "none";
           svgElement.style.width = "100%";
           svgElement.style.height = "auto";
-          svgElement.style.minWidth = "850px";
+
+          /*
+           * Codebase Map intentionally has
+           * a much larger minimum width because
+           * it contains individual files.
+           */
+          svgElement.style.minWidth =
+            view === "codebase"
+              ? "1200px"
+              : "850px";
         }
       } catch (error) {
-        console.error("Mermaid rendering error:", error);
+        console.error(
+          "Mermaid rendering error:",
+          error
+        );
 
         setRenderError(true);
 
@@ -76,20 +115,38 @@ export default function ArchitectureGraph({
     renderGraph();
   }, [architecture, view]);
 
-  const risks = architecture.risks || [];
+  const risks =
+    architecture.risks || [];
 
-  const highRiskCount = risks.filter(
-    (risk) => risk.severity === "high"
-  ).length;
+  const highRiskCount =
+    risks.filter(
+      (risk) =>
+        risk.severity === "high"
+    ).length;
 
-  const mediumRiskCount = risks.filter(
-    (risk) => risk.severity === "medium"
-  ).length;
+  const mediumRiskCount =
+    risks.filter(
+      (risk) =>
+        risk.severity === "medium"
+    ).length;
+
+  /*
+   * Total files represented inside
+   * architecture components.
+   */
+  const representedFileCount =
+    architecture.nodes.reduce(
+      (total, node) =>
+        total + node.files.length,
+      0
+    );
 
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#080808]">
+
       {/* Header */}
       <div className="flex flex-col gap-4 border-b border-white/10 bg-white/[0.015] p-5 sm:flex-row sm:items-center sm:justify-between">
+
         <div>
           <p className="text-sm font-medium text-gray-300">
             Architecture view
@@ -100,32 +157,54 @@ export default function ArchitectureGraph({
           </p>
         </div>
 
-        <div className="flex rounded-xl border border-white/10 bg-black/40 p-1">
+        <div className="flex flex-wrap rounded-xl border border-white/10 bg-black/40 p-1">
+
           <ViewButton
             active={view === "system"}
-            onClick={() => setView("system")}
+            onClick={() =>
+              setView("system")
+            }
           >
             System
           </ViewButton>
 
           <ViewButton
-            active={view === "dependencies"}
-            onClick={() => setView("dependencies")}
+            active={
+              view === "dependencies"
+            }
+            onClick={() =>
+              setView("dependencies")
+            }
           >
             Dependencies
           </ViewButton>
 
           <ViewButton
             active={view === "risks"}
-            onClick={() => setView("risks")}
+            onClick={() =>
+              setView("risks")
+            }
           >
             Risk Map
           </ViewButton>
+
+          <ViewButton
+            active={
+              view === "codebase"
+            }
+            onClick={() =>
+              setView("codebase")
+            }
+          >
+            Codebase Map
+          </ViewButton>
+
         </div>
       </div>
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-5 border-b border-white/5 px-5 py-3">
+
         {view === "system" && (
           <>
             <LegendItem
@@ -170,13 +249,39 @@ export default function ArchitectureGraph({
             />
           </>
         )}
+
+        {view === "codebase" && (
+          <>
+            <LegendItem
+              label="Architecture component"
+              className="bg-white"
+            />
+
+            <LegendItem
+              label="Repository file"
+              className="bg-blue-400"
+            />
+
+            <span className="text-[10px] text-gray-700">
+              Component structure expanded to file level
+            </span>
+          </>
+        )}
+
       </div>
 
       {/* Graph */}
-      <div className="overflow-x-auto p-5 sm:p-8">
+      <div
+        className={`overflow-auto p-5 sm:p-8 ${
+          view === "codebase"
+            ? "bg-[#050505]"
+            : ""
+        }`}
+      >
         {renderError ? (
           <div className="flex min-h-[440px] items-center justify-center">
             <div className="text-center">
+
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-red-400/20 bg-red-400/5 text-red-300">
                 !
               </div>
@@ -188,19 +293,26 @@ export default function ArchitectureGraph({
               <p className="mt-2 text-xs text-gray-600">
                 The architecture analysis is still available above.
               </p>
+
             </div>
           </div>
         ) : (
           <div
             ref={graphRef}
-            className="flex min-h-[460px] min-w-[850px] items-center justify-center"
+            className={`flex items-center justify-center ${
+              view === "codebase"
+                ? "min-h-[620px] min-w-[1200px]"
+                : "min-h-[460px] min-w-[850px]"
+            }`}
           />
         )}
       </div>
 
       {/* Footer */}
       <div className="border-t border-white/10 bg-white/[0.015] px-5 py-4">
+
         <div className="flex flex-col gap-2 text-xs text-gray-600 sm:flex-row sm:items-center sm:justify-between">
+
           <span>
             {architecture.nodes.length} components
             {" · "}
@@ -221,10 +333,19 @@ export default function ArchitectureGraph({
 
           {view === "risks" && (
             <span>
-              {highRiskCount} high · {mediumRiskCount} medium
+              {highRiskCount} high ·{" "}
+              {mediumRiskCount} medium
             </span>
           )}
+
+          {view === "codebase" && (
+            <span>
+              {representedFileCount} files mapped
+            </span>
+          )}
+
         </div>
+
       </div>
     </div>
   );
@@ -263,11 +384,13 @@ function LegendItem({
 }) {
   return (
     <div className="flex items-center gap-2 text-[10px] text-gray-500">
+
       <span
         className={`h-1.5 w-1.5 rounded-full ${className}`}
       />
 
       {label}
+
     </div>
   );
 }
@@ -276,17 +399,25 @@ function createMermaidGraph(
   architecture: Architecture,
   view: ViewMode
 ) {
-  const lines: string[] = ["flowchart TD"];
+  const lines: string[] = [
+    "flowchart TD",
+  ];
 
-  const validNodes = architecture.nodes.filter(
-    (node) => sanitizeId(node.id)
-  );
+  const validNodes =
+    architecture.nodes.filter(
+      (node) => sanitizeId(node.id)
+    );
 
-  const validNodeIds = new Set(
-    validNodes.map((node) => sanitizeId(node.id))
-  );
+  const validNodeIds =
+    new Set(
+      validNodes.map(
+        (node) =>
+          sanitizeId(node.id)
+      )
+    );
 
-  const risks = architecture.risks || [];
+  const risks =
+    architecture.risks || [];
 
   const riskMap = new Map<
     string,
@@ -294,7 +425,10 @@ function createMermaidGraph(
   >();
 
   for (const risk of risks) {
-    const existing = riskMap.get(risk.component);
+    const existing =
+      riskMap.get(
+        risk.component
+      );
 
     if (
       !existing ||
@@ -309,26 +443,32 @@ function createMermaidGraph(
   }
 
   /*
+   * ----------------------------------------
    * SYSTEM VIEW
-   *
-   * Focuses on architecture structure.
-   * Relationship labels are removed so the graph
-   * remains visually clean.
+   * ----------------------------------------
    */
+
   if (view === "system") {
     for (const node of validNodes) {
-      const id = sanitizeId(node.id);
+      const id =
+        sanitizeId(node.id);
 
       lines.push(
-        `    ${id}["${escapeLabel(node.label)}"]`
+        `    ${id}["${escapeLabel(
+          node.label
+        )}"]`
       );
     }
 
     for (const edge of architecture.edges) {
-      const source = sanitizeId(edge.source);
-      const target = sanitizeId(edge.target);
+      const source =
+        sanitizeId(edge.source);
 
-      if (!source || !target) continue;
+      const target =
+        sanitizeId(edge.target);
+
+      if (!source || !target)
+        continue;
 
       if (
         !validNodeIds.has(source) ||
@@ -350,30 +490,40 @@ function createMermaidGraph(
 
     for (const node of validNodes) {
       lines.push(
-        `    class ${sanitizeId(node.id)} component`
+        `    class ${sanitizeId(
+          node.id
+        )} component`
       );
     }
   }
 
   /*
+   * ----------------------------------------
    * DEPENDENCY VIEW
-   *
-   * Shows relationship labels.
+   * ----------------------------------------
    */
+
   if (view === "dependencies") {
     for (const node of validNodes) {
-      const id = sanitizeId(node.id);
+      const id =
+        sanitizeId(node.id);
 
       lines.push(
-        `    ${id}["${escapeLabel(node.label)}"]`
+        `    ${id}["${escapeLabel(
+          node.label
+        )}"]`
       );
     }
 
     for (const edge of architecture.edges) {
-      const source = sanitizeId(edge.source);
-      const target = sanitizeId(edge.target);
+      const source =
+        sanitizeId(edge.source);
 
-      if (!source || !target) continue;
+      const target =
+        sanitizeId(edge.target);
+
+      if (!source || !target)
+        continue;
 
       if (
         !validNodeIds.has(source) ||
@@ -382,9 +532,10 @@ function createMermaidGraph(
         continue;
       }
 
-      const relationship = escapeLabel(
-        edge.relationship
-      );
+      const relationship =
+        escapeLabel(
+          edge.relationship
+        );
 
       lines.push(
         `    ${source} -->|${relationship}| ${target}`
@@ -399,42 +550,58 @@ function createMermaidGraph(
 
     for (const node of validNodes) {
       lines.push(
-        `    class ${sanitizeId(node.id)} component`
+        `    class ${sanitizeId(
+          node.id
+        )} component`
       );
     }
   }
 
   /*
+   * ----------------------------------------
    * RISK VIEW
-   *
-   * Highlights components based on detected
-   * structural risk.
+   * ----------------------------------------
    */
+
   if (view === "risks") {
     for (const node of validNodes) {
-      const id = sanitizeId(node.id);
-      const severity = riskMap.get(node.id);
+      const id =
+        sanitizeId(node.id);
 
-      let label = node.label;
+      const severity =
+        riskMap.get(node.id);
 
-      if (severity === "high") {
+      let label =
+        node.label;
+
+      if (
+        severity === "high"
+      ) {
         label = `⚠ ${label}`;
       }
 
-      if (severity === "medium") {
+      if (
+        severity === "medium"
+      ) {
         label = `! ${label}`;
       }
 
       lines.push(
-        `    ${id}["${escapeLabel(label)}"]`
+        `    ${id}["${escapeLabel(
+          label
+        )}"]`
       );
     }
 
     for (const edge of architecture.edges) {
-      const source = sanitizeId(edge.source);
-      const target = sanitizeId(edge.target);
+      const source =
+        sanitizeId(edge.source);
 
-      if (!source || !target) continue;
+      const target =
+        sanitizeId(edge.target);
+
+      if (!source || !target)
+        continue;
 
       if (
         !validNodeIds.has(source) ||
@@ -463,14 +630,21 @@ function createMermaidGraph(
     );
 
     for (const node of validNodes) {
-      const id = sanitizeId(node.id);
-      const severity = riskMap.get(node.id);
+      const id =
+        sanitizeId(node.id);
 
-      if (severity === "high") {
+      const severity =
+        riskMap.get(node.id);
+
+      if (
+        severity === "high"
+      ) {
         lines.push(
           `    class ${id} highRisk`
         );
-      } else if (severity === "medium") {
+      } else if (
+        severity === "medium"
+      ) {
         lines.push(
           `    class ${id} mediumRisk`
         );
@@ -482,16 +656,202 @@ function createMermaidGraph(
     }
   }
 
+  /*
+   * ----------------------------------------
+   * CODEBASE MAP
+   * ----------------------------------------
+   *
+   * This is the dense repository view.
+   *
+   * Each architecture component is expanded
+   * into the files belonging to it.
+   *
+   * Component-to-component relationships remain
+   * visible, while files are connected to their
+   * parent architecture component.
+   */
+
+  if (view === "codebase") {
+    const fileIds = new Set<string>();
+
+    /*
+     * Create component nodes.
+     */
+
+    for (const node of validNodes) {
+      const componentId =
+        `component_${sanitizeId(
+          node.id
+        )}`;
+
+      lines.push(
+        `    ${componentId}["${escapeLabel(
+          node.label
+        )}"]`
+      );
+    }
+
+    /*
+     * Create file nodes.
+     */
+
+    for (const node of validNodes) {
+      const componentId =
+        `component_${sanitizeId(
+          node.id
+        )}`;
+
+      const files =
+        node.files || [];
+
+      for (
+        let index = 0;
+        index < files.length;
+        index++
+      ) {
+        const file =
+          files[index];
+
+        const fileId =
+          `file_${sanitizeId(
+            node.id
+          )}_${index}`;
+
+        fileIds.add(fileId);
+
+        lines.push(
+          `    ${fileId}["${escapeLabel(
+            shortenFilePath(file)
+          )}"]`
+        );
+
+        /*
+         * Connect file to its
+         * architecture component.
+         */
+
+        lines.push(
+          `    ${componentId} -.-> ${fileId}`
+        );
+      }
+    }
+
+    /*
+     * Connect architecture components.
+     */
+
+    for (const edge of architecture.edges) {
+      const source =
+        sanitizeId(edge.source);
+
+      const target =
+        sanitizeId(edge.target);
+
+      if (!source || !target)
+        continue;
+
+      if (
+        !validNodeIds.has(source) ||
+        !validNodeIds.has(target)
+      ) {
+        continue;
+      }
+
+      lines.push(
+        `    component_${source} --> component_${target}`
+      );
+    }
+
+    lines.push("");
+
+    /*
+     * Component styling.
+     */
+
+    lines.push(
+      "    classDef component fill:#151515,stroke:#777777,stroke-width:2px,color:#ffffff;"
+    );
+
+    /*
+     * File styling.
+     */
+
+    lines.push(
+      "    classDef file fill:#0d1720,stroke:#3b82f6,stroke-width:1px,color:#bfdbfe;"
+    );
+
+    /*
+     * Apply component classes.
+     */
+
+    for (const node of validNodes) {
+      lines.push(
+        `    class component_${sanitizeId(
+          node.id
+        )} component`
+      );
+    }
+
+    /*
+     * Apply file classes.
+     */
+
+    for (const fileId of fileIds) {
+      lines.push(
+        `    class ${fileId} file`
+      );
+    }
+  }
+
   return lines.join("\n");
 }
 
-function sanitizeId(value: string) {
-  return value
-    .replace(/[^a-zA-Z0-9_]/g, "_")
-    .replace(/^(\d)/, "_$1");
+/*
+ * Keeps very long repository paths from
+ * making individual Mermaid nodes enormous.
+ *
+ * The actual file still comes from the
+ * architecture data; this only shortens
+ * the visual label.
+ */
+function shortenFilePath(
+  filePath: string
+) {
+  const normalized =
+    filePath.replace(
+      /\\/g,
+      "/"
+    );
+
+  const parts =
+    normalized.split("/");
+
+  if (parts.length <= 3) {
+    return normalized;
+  }
+
+  return `…/${parts
+    .slice(-2)
+    .join("/")}`;
 }
 
-function escapeLabel(value: string) {
+function sanitizeId(
+  value: string
+) {
+  return value
+    .replace(
+      /[^a-zA-Z0-9_]/g,
+      "_"
+    )
+    .replace(
+      /^(\d)/,
+      "_$1"
+    );
+}
+
+function escapeLabel(
+  value: string
+) {
   return value
     .replace(/"/g, "'")
     .replace(/\n/g, " ")
