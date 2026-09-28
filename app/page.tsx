@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { Architecture } from "@/lib/types";
+import type {
+  Architecture,
+  ArchitectureNode,
+} from "@/lib/types";
 import ArchitectureGraph from "@/components/ArchitectureGraph";
 
 export default function Home() {
@@ -142,10 +145,6 @@ export default function Home() {
     }
   }
 
-  const metrics = architecture?.metrics;
-  const health = architecture?.health;
-  const risks = architecture?.risks || [];
-
   return (
     <main className="min-h-screen bg-[#080808] text-white">
       {/* Navigation */}
@@ -189,8 +188,8 @@ export default function Home() {
 
           <p className="mx-auto mt-7 max-w-2xl text-base leading-7 text-gray-400 sm:text-lg">
             ArchLens analyzes a GitHub repository, discovers its
-            architecture, maps dependencies, detects structural risks,
-            and explains how the system works.
+            architecture, maps dependencies, and explains how the
+            system works.
           </p>
 
           {/* Repository Input */}
@@ -228,6 +227,7 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Error Message */}
             {error && (
               <div className="mt-3 flex items-start gap-3 rounded-xl border border-red-400/20 bg-red-400/[0.06] px-4 py-3 text-left">
                 <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-red-400/30 text-xs text-red-400">
@@ -256,7 +256,7 @@ export default function Home() {
             <span>•</span>
             <span>AI architecture insights</span>
             <span>•</span>
-            <span>Risk detection</span>
+            <span>Developer onboarding</span>
           </div>
         </div>
       </section>
@@ -284,19 +284,19 @@ export default function Home() {
             <ProcessCard
               number="02"
               title="Analyze"
-              description="Extract imports, dependencies, layers, and entry points through static analysis."
+              description="Extract imports, dependencies, layers, and relationships through static analysis."
             />
 
             <ProcessCard
               number="03"
               title="Understand"
-              description="Groq AI identifies meaningful architectural components and relationships."
+              description="Groq AI identifies meaningful architectural components and responsibilities."
             />
 
             <ProcessCard
               number="04"
               title="Diagnose"
-              description="ArchLens calculates architecture health and detects structural risks."
+              description="ArchLens calculates architecture health, structural risks, and an onboarding path."
             />
           </div>
         </div>
@@ -306,7 +306,8 @@ export default function Home() {
       {architecture && (
         <section className="mx-auto max-w-7xl px-6 py-20">
           <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#101010] shadow-2xl shadow-black/30">
-            {/* Overview */}
+
+            {/* Architecture Header */}
             <div className="border-b border-white/10 p-7 sm:p-9">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -325,18 +326,12 @@ export default function Home() {
 
                 <div className="flex shrink-0 gap-2">
                   <Stat
-                    value={
-                      metrics?.componentCount ??
-                      architecture.nodes.length
-                    }
+                    value={architecture.nodes.length}
                     label="components"
                   />
 
                   <Stat
-                    value={
-                      metrics?.relationshipCount ??
-                      architecture.edges.length
-                    }
+                    value={architecture.edges.length}
                     label="relationships"
                   />
                 </div>
@@ -344,31 +339,29 @@ export default function Home() {
             </div>
 
             <div className="p-7 sm:p-9">
+
               {/* Health + Metrics */}
-              <div className="grid gap-4 lg:grid-cols-[1.1fr_2fr]">
+              <div className="grid gap-4 lg:grid-cols-[270px_1fr]">
+
                 {/* Health */}
                 <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
                   <SectionLabel text="ARCHITECTURE HEALTH" />
 
-                  <div className="mt-5 flex items-center gap-6">
-                    <HealthRing score={health?.score ?? 0} />
+                  <div className="mt-6 flex items-center gap-5">
+                    <HealthRing
+                      score={architecture.health?.score ?? 0}
+                    />
 
                     <div>
                       <p className="text-lg font-semibold">
-                        {health
-                          ? health.score >= 90
-                            ? "Strong structure"
-                            : health.score >= 75
-                              ? "Generally healthy"
-                              : health.score >= 60
-                                ? "Moderate concerns"
-                                : "Needs attention"
-                          : "Unavailable"}
+                        {getHealthLabel(
+                          architecture.health?.score ?? 0
+                        )}
                       </p>
 
-                      <p className="mt-2 text-sm leading-6 text-gray-500">
-                        {health?.summary ||
-                          "Architecture health could not be determined."}
+                      <p className="mt-2 text-xs leading-5 text-gray-500">
+                        {architecture.health?.summary ||
+                          "Architecture health calculated from the analyzed dependency structure."}
                       </p>
                     </div>
                   </div>
@@ -380,32 +373,47 @@ export default function Home() {
 
                   <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <MetricCard
-                      value={metrics?.fileCount ?? 0}
+                      value={
+                        architecture.metrics?.fileCount ?? 0
+                      }
                       label="Files analyzed"
                     />
 
                     <MetricCard
-                      value={metrics?.componentCount ?? 0}
+                      value={
+                        architecture.metrics?.componentCount ??
+                        architecture.nodes.length
+                      }
                       label="Components"
                     />
 
                     <MetricCard
-                      value={metrics?.relationshipCount ?? 0}
+                      value={
+                        architecture.metrics?.relationshipCount ??
+                        architecture.edges.length
+                      }
                       label="Relationships"
                     />
 
                     <MetricCard
-                      value={metrics?.externalDependencyCount ?? 0}
+                      value={
+                        architecture.metrics
+                          ?.externalDependencyCount ?? 0
+                      }
                       label="External deps"
                     />
 
                     <MetricCard
-                      value={metrics?.entryPointCount ?? 0}
+                      value={
+                        architecture.metrics?.entryPointCount ?? 0
+                      }
                       label="Entry points"
                     />
 
                     <MetricCard
-                      value={metrics?.layerCount ?? 0}
+                      value={
+                        architecture.metrics?.layerCount ?? 0
+                      }
                       label="Layers"
                     />
                   </div>
@@ -413,25 +421,86 @@ export default function Home() {
               </div>
 
               {/* Strengths + Concerns */}
-              {health && (
-                <div className="mt-8 grid gap-4 md:grid-cols-2">
-                  <InsightPanel
-                    title="Strengths"
-                    items={health.strengths}
-                    type="positive"
-                  />
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
 
-                  <InsightPanel
-                    title="Concerns"
-                    items={health.concerns}
-                    type="warning"
-                  />
+                <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-green-400/10 text-xs text-green-400">
+                      ✓
+                    </div>
+
+                    <h3 className="text-sm font-medium">
+                      Strengths
+                    </h3>
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    {(architecture.health?.strengths || []).length >
+                    0 ? (
+                      architecture.health?.strengths.map(
+                        (strength, index) => (
+                          <p
+                            key={index}
+                            className="text-xs leading-5 text-gray-500"
+                          >
+                            • {strength}
+                          </p>
+                        )
+                      )
+                    ) : (
+                      <>
+                        <p className="text-xs leading-5 text-gray-500">
+                          •{" "}
+                          {architecture.nodes.length} meaningful
+                          architectural components were identified.
+                        </p>
+
+                        <p className="text-xs leading-5 text-gray-500">
+                          •{" "}
+                          {architecture.edges.length} architectural
+                          relationships were detected.
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </div>
-              )}
 
-              {/* Risks */}
+                <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-yellow-400/10 text-xs text-yellow-400">
+                      !
+                    </div>
+
+                    <h3 className="text-sm font-medium">
+                      Concerns
+                    </h3>
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    {(architecture.health?.concerns || []).length >
+                    0 ? (
+                      architecture.health?.concerns.map(
+                        (concern, index) => (
+                          <p
+                            key={index}
+                            className="text-xs leading-5 text-gray-500"
+                          >
+                            • {concern}
+                          </p>
+                        )
+                      )
+                    ) : (
+                      <p className="text-xs leading-5 text-gray-600">
+                        No additional observations were detected.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Architecture Detective */}
               <div className="mt-12 border-t border-white/10 pt-10">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <SectionLabel text="ARCHITECTURE DETECTIVE" />
 
@@ -439,37 +508,53 @@ export default function Home() {
                       Structural Risks
                     </h3>
 
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
-                      Evidence-based findings from the analyzed dependency
-                      structure.
+                    <p className="mt-2 text-sm text-gray-500">
+                      Evidence-based findings from the analyzed
+                      dependency structure.
                     </p>
                   </div>
 
                   <div className="flex gap-2">
-                    <RiskCount
-                      count={metrics?.highRiskCount ?? 0}
+                    <RiskCounter
+                      value={
+                        architecture.metrics?.highRiskCount ??
+                        architecture.risks?.filter(
+                          (risk) => risk.severity === "high"
+                        ).length ??
+                        0
+                      }
                       label="high"
                       severity="high"
                     />
 
-                    <RiskCount
-                      count={metrics?.mediumRiskCount ?? 0}
+                    <RiskCounter
+                      value={
+                        architecture.metrics?.mediumRiskCount ??
+                        architecture.risks?.filter(
+                          (risk) => risk.severity === "medium"
+                        ).length ??
+                        0
+                      }
                       label="medium"
                       severity="medium"
                     />
                   </div>
                 </div>
 
-                {risks.length > 0 ? (
-                  <div className="mt-6 grid gap-4 md:grid-cols-2">
-                    {risks.map((risk) => (
-                      <RiskCard key={risk.id} risk={risk} />
+                {architecture.risks &&
+                architecture.risks.length > 0 ? (
+                  <div className="mt-6 space-y-4">
+                    {architecture.risks.map((risk) => (
+                      <RiskCard
+                        key={risk.id}
+                        risk={risk}
+                      />
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+                  <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.025] p-6">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-green-400/20 bg-green-400/5 text-green-400">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-400/10 text-green-400">
                         ✓
                       </div>
 
@@ -480,8 +565,7 @@ export default function Home() {
 
                         <p className="mt-1 text-xs text-gray-600">
                           No significant fan-in, fan-out, or oversized
-                          component patterns were detected in the analyzed
-                          repository.
+                          component patterns were detected.
                         </p>
                       </div>
                     </div>
@@ -495,54 +579,46 @@ export default function Home() {
 
                 <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {architecture.nodes.map((node) => {
-                    const nodeRisks = risks.filter(
-                      (risk) => risk.component === node.id
-                    );
+                    const nodeRisk =
+                      architecture.risks?.find(
+                        (risk) => risk.component === node.label
+                      );
 
                     return (
                       <div
                         key={node.id}
-                        className={`group rounded-2xl border p-5 transition ${
-                          nodeRisks.some(
-                            (risk) => risk.severity === "high"
-                          )
-                            ? "border-red-400/20 bg-red-400/[0.025]"
-                            : nodeRisks.length > 0
-                              ? "border-yellow-400/20 bg-yellow-400/[0.02]"
-                              : "border-white/10 bg-white/[0.025]"
-                        } hover:bg-white/[0.04]`}
+                        className="group rounded-2xl border border-white/10 bg-white/[0.025] p-5 transition hover:border-white/20 hover:bg-white/[0.04]"
                       >
                         <div className="mb-4 flex items-start justify-between gap-3">
                           <h3 className="font-medium">
                             {node.label}
                           </h3>
 
-                          <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-gray-500">
-                            {node.type}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {nodeRisk && (
+                              <span
+                                className={`rounded-full border px-2 py-1 text-[9px] uppercase tracking-wider ${
+                                  nodeRisk.severity === "high"
+                                    ? "border-red-400/20 bg-red-400/5 text-red-400"
+                                    : nodeRisk.severity === "medium"
+                                      ? "border-yellow-400/20 bg-yellow-400/5 text-yellow-400"
+                                      : "border-white/10 text-gray-500"
+                                }`}
+                              >
+                                {nodeRisk.severity} risk
+                              </span>
+                            )}
+
+                            <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-gray-500">
+                              {node.type}
+                            </span>
+                          </div>
                         </div>
 
                         <p className="text-sm leading-6 text-gray-400">
                           {node.description ||
                             "No description available."}
                         </p>
-
-                        {nodeRisks.length > 0 && (
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {nodeRisks.map((risk) => (
-                              <span
-                                key={risk.id}
-                                className={`rounded-full px-2 py-1 text-[10px] ${
-                                  risk.severity === "high"
-                                    ? "bg-red-400/10 text-red-300"
-                                    : "bg-yellow-400/10 text-yellow-300"
-                                }`}
-                              >
-                                {risk.severity} risk
-                              </span>
-                            ))}
-                          </div>
-                        )}
 
                         {node.files.length > 0 && (
                           <div className="mt-5 border-t border-white/5 pt-4">
@@ -551,19 +627,21 @@ export default function Home() {
                             </p>
 
                             <div className="space-y-1">
-                              {node.files.slice(0, 6).map((file) => (
-                                <p
-                                  key={file}
-                                  className="truncate font-mono text-[11px] text-gray-500"
-                                  title={file}
-                                >
-                                  {file}
-                                </p>
-                              ))}
+                              {node.files
+                                .slice(0, 8)
+                                .map((file) => (
+                                  <p
+                                    key={file}
+                                    className="truncate font-mono text-[11px] text-gray-500"
+                                    title={file}
+                                  >
+                                    {file}
+                                  </p>
+                                ))}
 
-                              {node.files.length > 6 && (
+                              {node.files.length > 8 && (
                                 <p className="pt-1 text-[10px] text-gray-700">
-                                  +{node.files.length - 6} more files
+                                  +{node.files.length - 8} more files
                                 </p>
                               )}
                             </div>
@@ -586,8 +664,8 @@ export default function Home() {
                     </h3>
 
                     <p className="mt-2 text-sm text-gray-500">
-                      A visual representation of the major components and
-                      their relationships.
+                      A visual representation of the major
+                      components and their relationships.
                     </p>
                   </div>
 
@@ -607,9 +685,14 @@ export default function Home() {
                 />
               </div>
 
+              {/* Developer Onboarding */}
+              <OnboardingGuide
+                architecture={architecture}
+              />
+
               {/* AI Explanation */}
               {explanation && (
-                <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.025] p-6 sm:p-7">
+                <div className="mt-12 rounded-2xl border border-white/10 bg-white/[0.025] p-6 sm:p-7">
                   <div className="mb-5 flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-sm font-bold text-black">
                       A
@@ -641,8 +724,8 @@ export default function Home() {
                 </h3>
 
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
-                  Ask questions about the analyzed architecture and get
-                  practical answers for navigating the codebase.
+                  Ask questions about the analyzed architecture and
+                  get practical answers for navigating the codebase.
                 </p>
 
                 <div className="mt-6 flex flex-col gap-2 sm:flex-row">
@@ -751,8 +834,8 @@ export default function Home() {
 
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-600">
               Paste a public GitHub repository above to discover its
-              components, dependencies, architecture, structural risks,
-              and codebase insights.
+              components, dependencies, architecture, and codebase
+              insights.
             </p>
           </div>
         </section>
@@ -769,28 +852,9 @@ export default function Home() {
             </h2>
 
             <p className="mt-2 text-sm text-gray-600">
-              Scanning files, mapping dependencies, understanding
-              architecture, and detecting structural risks.
+              Scanning files, mapping dependencies, and asking AI to
+              understand the architecture.
             </p>
-
-            <div className="mx-auto mt-8 max-w-sm space-y-2 text-left">
-              <LoadingStep
-                label="Scanning repository"
-                active
-              />
-              <LoadingStep
-                label="Mapping dependencies"
-                active
-              />
-              <LoadingStep
-                label="Understanding architecture"
-                active
-              />
-              <LoadingStep
-                label="Detecting structural risks"
-                active
-              />
-            </div>
           </div>
         </section>
       )}
@@ -810,6 +874,273 @@ export default function Home() {
     </main>
   );
 }
+
+/* ============================================================
+   DEVELOPER ONBOARDING GUIDE
+   ============================================================ */
+
+function OnboardingGuide({
+  architecture,
+}: {
+  architecture: Architecture;
+}) {
+  const nodes = architecture.nodes;
+
+  if (!nodes.length) {
+    return null;
+  }
+
+  function findNode(patterns: string[]) {
+    return nodes.find((node) => {
+      const value =
+        `${node.id} ${node.label} ${node.type}`.toLowerCase();
+
+      return patterns.some((pattern) =>
+        value.includes(pattern)
+      );
+    });
+  }
+
+  const entryNode =
+    findNode([
+      "api",
+      "route",
+      "controller",
+      "endpoint",
+      "entry",
+    ]) ||
+    nodes
+      .filter((node) => node.type !== "test")
+      .sort((a, b) => {
+        const aOutgoing = architecture.edges.filter(
+          (edge) => edge.source === a.id
+        ).length;
+
+        const bOutgoing = architecture.edges.filter(
+          (edge) => edge.source === b.id
+        ).length;
+
+        return bOutgoing - aOutgoing;
+      })[0] ||
+    nodes[0];
+
+  const connectedIds = new Set<string>();
+
+  architecture.edges.forEach((edge) => {
+    if (edge.source === entryNode.id) {
+      connectedIds.add(edge.target);
+    }
+
+    if (edge.target === entryNode.id) {
+      connectedIds.add(edge.source);
+    }
+  });
+
+  const connectedNodes = nodes.filter(
+    (node) =>
+      connectedIds.has(node.id) &&
+      node.id !== entryNode.id &&
+      node.type !== "test"
+  );
+
+  const preferredOrder = [
+    "model",
+    "middleware",
+    "service",
+    "database",
+    "utility",
+    "other",
+  ];
+
+  const supportingNodes = connectedNodes.sort((a, b) => {
+    const aIndex = preferredOrder.indexOf(a.type);
+    const bIndex = preferredOrder.indexOf(b.type);
+
+    return (
+      (aIndex === -1 ? 99 : aIndex) -
+      (bIndex === -1 ? 99 : bIndex)
+    );
+  });
+
+  const testNode =
+    nodes.find((node) => node.type === "test") ||
+    findNode(["test", "tests"]);
+
+  const selectedNodes = [
+    entryNode,
+    ...supportingNodes,
+    ...(testNode ? [testNode] : []),
+  ];
+
+  const uniqueNodes = selectedNodes.filter(
+    (node, index, array) =>
+      array.findIndex((item) => item.id === node.id) ===
+      index
+  );
+
+  const steps = uniqueNodes.slice(0, 5).map(
+    (node, index) => ({
+      number: String(index + 1).padStart(2, "0"),
+      title:
+        index === 0
+          ? "Start here"
+          : index === uniqueNodes.length - 1 &&
+              node.type === "test"
+            ? "Validate your understanding"
+            : `Understand ${node.label}`,
+      component: node,
+      reason: getOnboardingReason(
+        node,
+        index,
+        entryNode,
+        architecture
+      ),
+    })
+  );
+
+  return (
+    <div className="mt-12 border-t border-white/10 pt-10">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <SectionLabel text="DEVELOPER ONBOARDING" />
+
+          <h3 className="mt-2 text-2xl font-semibold tracking-tight">
+            Know where to start.
+          </h3>
+
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
+            A guided exploration path generated from the analyzed
+            architecture and dependency structure.
+          </p>
+        </div>
+
+        <div className="rounded-full border border-green-400/10 bg-green-400/[0.05] px-3 py-1.5 text-xs text-green-400">
+          {steps.length} steps
+        </div>
+      </div>
+
+      <div className="mt-7 grid gap-4 lg:grid-cols-5">
+        {steps.map((step) => (
+          <div
+            key={`${step.number}-${step.component.id}`}
+            className="relative rounded-2xl border border-white/10 bg-white/[0.025] p-5 transition hover:border-white/20 hover:bg-white/[0.04]"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-xs text-gray-600">
+                {step.number}
+              </span>
+
+              <span className="rounded-full border border-white/10 px-2 py-1 text-[9px] uppercase tracking-wider text-gray-500">
+                {step.component.type}
+              </span>
+            </div>
+
+            <h4 className="mt-6 text-sm font-semibold">
+              {step.title}
+            </h4>
+
+            <p className="mt-2 text-sm font-medium text-gray-300">
+              {step.component.label}
+            </p>
+
+            <p className="mt-3 text-xs leading-5 text-gray-500">
+              {step.reason}
+            </p>
+
+            {step.component.files.length > 0 && (
+              <div className="mt-5 border-t border-white/5 pt-4">
+                <p className="mb-2 text-[9px] font-medium tracking-wider text-gray-600">
+                  FIRST FILE TO OPEN
+                </p>
+
+                <p
+                  className="truncate font-mono text-[10px] text-gray-500"
+                  title={step.component.files[0]}
+                >
+                  {step.component.files[0]}
+                </p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.015] px-5 py-4">
+        <div className="flex gap-3">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-xs font-bold text-black">
+            →
+          </div>
+
+          <div>
+            <p className="text-sm font-medium">
+              Recommended exploration strategy
+            </p>
+
+            <p className="mt-1 text-xs leading-5 text-gray-500">
+              Start at the public-facing entry point, follow its
+              connected components, then inspect tests to see how
+              the architecture is actually exercised.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getOnboardingReason(
+  node: ArchitectureNode,
+  index: number,
+  entryNode: ArchitectureNode,
+  architecture: Architecture
+) {
+  if (index === 0) {
+    return node.id === entryNode.id
+      ? "The likely public entry point. Start here to understand how requests enter the system."
+      : "The strongest available starting component based on the detected dependency structure.";
+  }
+
+  if (node.type === "test") {
+    return "Tests reveal how the system is expected to behave and connect the major components.";
+  }
+
+  const incoming = architecture.edges.filter(
+    (edge) => edge.target === node.id
+  ).length;
+
+  const outgoing = architecture.edges.filter(
+    (edge) => edge.source === node.id
+  ).length;
+
+  if (node.type === "model") {
+    return "Understand the data structures used by the surrounding components.";
+  }
+
+  if (node.type === "middleware") {
+    return "Inspect this next to understand cross-cutting behavior such as authentication or request processing.";
+  }
+
+  if (node.type === "utility") {
+    return "These helpers are reused by other components, so understanding them clarifies lower-level behavior.";
+  }
+
+  if (outgoing > incoming) {
+    return "This component connects to several parts of the system, making it useful for understanding downstream behavior.";
+  }
+
+  if (incoming > outgoing) {
+    return "Several components depend on this area, so understanding it explains an important part of the dependency structure.";
+  }
+
+  return (
+    node.description ||
+    "Inspect this component to understand its role in the overall architecture."
+  );
+}
+
+/* ============================================================
+   UI HELPERS
+   ============================================================ */
 
 function SectionLabel({ text }: { text: string }) {
   return (
@@ -870,11 +1201,9 @@ function MetricCard({
 }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-4">
-      <p className="text-xl font-semibold tracking-tight">
-        {value}
-      </p>
+      <p className="text-lg font-semibold">{value}</p>
 
-      <p className="mt-1 text-[10px] uppercase tracking-wider text-gray-600">
+      <p className="mt-1 text-[9px] uppercase tracking-wider text-gray-600">
         {label}
       </p>
     </div>
@@ -884,125 +1213,70 @@ function MetricCard({
 function HealthRing({ score }: { score: number }) {
   const safeScore = Math.max(0, Math.min(100, score));
 
-  const radius = 42;
-  const circumference = 2 * Math.PI * radius;
-  const offset =
-    circumference - (safeScore / 100) * circumference;
-
   return (
-    <div className="relative h-28 w-28 shrink-0">
-      <svg
-        viewBox="0 0 100 100"
-        className="h-full w-full -rotate-90"
-      >
-        <circle
-          cx="50"
-          cy="50"
-          r={radius}
-          fill="none"
-          stroke="rgba(255,255,255,0.06)"
-          strokeWidth="7"
-        />
+    <div
+      className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-full"
+      style={{
+        background: `conic-gradient(
+          white ${safeScore * 3.6}deg,
+          rgba(255,255,255,0.08) ${safeScore * 3.6}deg
+        )`,
+      }}
+    >
+      <div className="flex h-[76px] w-[76px] flex-col items-center justify-center rounded-full bg-[#151515]">
+        <span className="text-xl font-semibold">
+          {safeScore}
+        </span>
 
-        <circle
-          cx="50"
-          cy="50"
-          r={radius}
-          fill="none"
-          stroke="white"
-          strokeWidth="7"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-        />
-      </svg>
-
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-2xl font-bold">
-            {safeScore}
-          </p>
-
-          <p className="text-[9px] uppercase tracking-wider text-gray-600">
-            / 100
-          </p>
-        </div>
+        <span className="text-[9px] text-gray-600">
+          / 100
+        </span>
       </div>
     </div>
   );
 }
 
-function InsightPanel({
-  title,
-  items,
-  type,
-}: {
-  title: string;
-  items: string[];
-  type: "positive" | "warning";
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
-      <div className="flex items-center gap-3">
-        <div
-          className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm ${
-            type === "positive"
-              ? "bg-green-400/10 text-green-300"
-              : "bg-yellow-400/10 text-yellow-300"
-          }`}
-        >
-          {type === "positive" ? "✓" : "!"}
-        </div>
+function getHealthLabel(score: number) {
+  if (score >= 90) {
+    return "Strong structure";
+  }
 
-        <h3 className="font-medium">{title}</h3>
-      </div>
+  if (score >= 75) {
+    return "Healthy structure";
+  }
 
-      <div className="mt-4 space-y-3">
-        {items.length > 0 ? (
-          items.map((item, index) => (
-            <div
-              key={`${item}-${index}`}
-              className="flex gap-3 text-sm leading-6 text-gray-400"
-            >
-              <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gray-600" />
-              <span>{item}</span>
-            </div>
-          ))
-        ) : (
-          <p className="text-sm text-gray-600">
-            No additional observations were detected.
-          </p>
-        )}
-      </div>
-    </div>
-  );
+  if (score >= 60) {
+    return "Needs attention";
+  }
+
+  return "High attention";
 }
 
-function RiskCount({
-  count,
+function RiskCounter({
+  value,
   label,
   severity,
 }: {
-  count: number;
+  value: number;
   label: string;
   severity: "high" | "medium";
 }) {
   return (
     <div
-      className={`rounded-xl border px-3 py-2 text-center ${
+      className={`min-w-[64px] rounded-xl border px-3 py-2 text-center ${
         severity === "high"
-          ? "border-red-400/15 bg-red-400/[0.04]"
-          : "border-yellow-400/15 bg-yellow-400/[0.04]"
+          ? "border-red-400/20 bg-red-400/[0.04]"
+          : "border-yellow-400/20 bg-yellow-400/[0.04]"
       }`}
     >
       <p
         className={`text-lg font-semibold ${
           severity === "high"
-            ? "text-red-300"
-            : "text-yellow-300"
+            ? "text-red-400"
+            : "text-yellow-400"
         }`}
       >
-        {count}
+        {value}
       </p>
 
       <p className="text-[9px] uppercase tracking-wider text-gray-600">
@@ -1017,62 +1291,48 @@ function RiskCard({
 }: {
   risk: NonNullable<Architecture["risks"]>[number];
 }) {
-  const isHigh = risk.severity === "high";
-
   return (
-    <div
-      className={`rounded-2xl border p-5 ${
-        isHigh
-          ? "border-red-400/15 bg-red-400/[0.025]"
-          : "border-yellow-400/15 bg-yellow-400/[0.02]"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-4">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                isHigh
-                  ? "bg-red-400"
-                  : "bg-yellow-400"
-              }`}
-            />
-
-            <span
-              className={`text-[10px] font-medium uppercase tracking-wider ${
-                isHigh
-                  ? "text-red-300"
-                  : "text-yellow-300"
+              className={`rounded-full border px-2.5 py-1 text-[9px] font-medium uppercase tracking-wider ${
+                risk.severity === "high"
+                  ? "border-red-400/20 bg-red-400/5 text-red-400"
+                  : risk.severity === "medium"
+                    ? "border-yellow-400/20 bg-yellow-400/5 text-yellow-400"
+                    : "border-white/10 text-gray-500"
               }`}
             >
               {risk.severity} risk
             </span>
+
+            <span className="rounded-full border border-white/10 px-2.5 py-1 text-[9px] uppercase tracking-wider text-gray-600">
+              {risk.component}
+            </span>
           </div>
 
-          <h4 className="mt-2 font-medium">
+          <h4 className="mt-4 text-base font-semibold">
             {risk.title}
           </h4>
-        </div>
 
-        <span className="max-w-[140px] truncate rounded-full border border-white/10 px-2.5 py-1 font-mono text-[9px] text-gray-600">
-          {risk.component}
-        </span>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
+            {risk.description}
+          </p>
+        </div>
       </div>
 
-      <p className="mt-4 text-sm leading-6 text-gray-400">
-        {risk.description}
-      </p>
-
       {risk.evidence.length > 0 && (
-        <div className="mt-4">
-          <p className="text-[10px] uppercase tracking-wider text-gray-600">
-            Evidence
+        <div className="mt-5 border-t border-white/5 pt-5">
+          <p className="mb-3 text-[9px] font-medium tracking-wider text-gray-600">
+            EVIDENCE
           </p>
 
-          <div className="mt-2 space-y-1">
+          <div className="space-y-2">
             {risk.evidence.map((item, index) => (
               <p
-                key={`${item}-${index}`}
+                key={index}
                 className="text-xs leading-5 text-gray-500"
               >
                 • {item}
@@ -1082,37 +1342,15 @@ function RiskCard({
         </div>
       )}
 
-      <div className="mt-4 border-t border-white/5 pt-4">
-        <p className="text-[10px] uppercase tracking-wider text-gray-600">
-          Recommendation
+      <div className="mt-5 border-t border-white/5 pt-5">
+        <p className="mb-2 text-[9px] font-medium tracking-wider text-gray-600">
+          RECOMMENDATION
         </p>
 
-        <p className="mt-2 text-xs leading-5 text-gray-500">
+        <p className="text-xs leading-5 text-gray-500">
           {risk.recommendation}
         </p>
       </div>
-    </div>
-  );
-}
-
-function LoadingStep({
-  label,
-  active,
-}: {
-  label: string;
-  active: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-4 py-3">
-      <div
-        className={`h-1.5 w-1.5 rounded-full ${
-          active ? "bg-white" : "bg-gray-700"
-        }`}
-      />
-
-      <span className="text-xs text-gray-500">
-        {label}
-      </span>
     </div>
   );
 }
