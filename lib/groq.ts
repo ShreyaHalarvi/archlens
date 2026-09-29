@@ -1,17 +1,47 @@
 import type {
   Architecture,
-  ArchitectureMetrics,
-  ArchitectureRisk,
+  ArchitectureEdge,
+  ArchitectureNode,
 } from "./types";
+import { buildMermaid } from "./mermaid";
 
-type GroqArchitectureResponse = {
-  nodes: Architecture["nodes"];
-  edges: Architecture["edges"];
+type RepositoryAnalysis = {
+  metrics: Record<string, number>;
+  languages: Record<string, number>;
+  layers: string[];
+  entryPoints: string[];
+  externalDependencies: string[];
+  files: any[];
+  dependencies: any[];
+};
+
+type GroqResponse = {
+  nodes: ArchitectureNode[];
+  edges: ArchitectureEdge[];
   summary: string;
 };
 
+const NODE_TYPES = [
+  "api",
+  "service",
+  "database",
+  "model",
+  "middleware",
+  "utility",
+  "test",
+  "other",
+] as const;
+
+const EDGE_TYPES = [
+  "calls",
+  "imports",
+  "uses",
+  "stores",
+  "depends_on",
+] as const;
+
 export async function analyzeWithGroq(
-  repositoryData: unknown
+  analysis: RepositoryAnalysis
 ): Promise<Architecture> {
   const apiKey = process.env.GROQ_API_KEY;
 
@@ -19,148 +49,139 @@ export async function analyzeWithGroq(
     throw new Error("GROQ_API_KEY is missing");
   }
 
-  const compactData =
-    createCompactRepositoryData(repositoryData);
+  const compact = {
+    metrics: analysis.metrics,
+    languages: analysis.languages,
+    layers: analysis.layers,
+    entryPoints: analysis.entryPoints.slice(0, 12),
+    externalDependencies: analysis.externalDependencies.slice(0, 20),
+    files: analysis.files.slice(0, 60).map((file) => ({
+      path: file.path,
+      language: file.language,
+      layer: file.layer,
+      entry: file.isEntryPoint,
+      internal: file.internalImports.slice(0, 8),
+      external: file.externalImports.slice(0, 8),
+    })),
+    dependencies: analysis.dependencies.slice(0, 120),
+  };
 
   const prompt = `
-You are ArchLens, a software architecture analyzer.
+You are ArchLens, an architecture extraction engine.
 
-Analyze the provided static repository analysis and create a concise architecture model.
+Turn the supplied STATIC repository evidence into a high-level architecture
+for developer onboarding.
 
-IMPORTANT:
-- Always return nodes, edges, and summary.
-- nodes must contain at least 1 item when repository files are provided.
-- edges may be an empty array when no reliable relationship exists.
-- summary must always be a non-empty string.
-- Use ONLY the provided repository information.
-- Do NOT invent files, components, dependencies, behavior, or technologies.
-- Group related files into meaningful architectural components.
-- Prefer a small number of useful components.
-- Use the provided layers, entry points, imports, and dependencies.
-- Component files must be real file paths from the repository analysis.
-- Edge source and target must refer to existing component IDs.
-- Keep descriptions short.
-- Do not calculate health scores.
-- Do not create risks.
-- Do not discuss security.
+This is NOT a file browser. Group related files into meaningful components.
+Do not create one node per file.
 
-Allowed component types:
+For example, if many example files demonstrate authentication, create one
+"Authentication Examples" component. If several files implement routing,
+create a "Routing" or "Routing & Middleware" component. If the repository
+contains a real framework/core implementation, use its actual repository
+concept as a component, such as "Express Core" when the evidence supports it.
+
+Do not create a generic "Core Library", "Miscellaneous", or "Application"
+component when a specific evidence-based name is possible.
+
+Every file listed inside a node MUST exist in the supplied file list.
+Every edge MUST be supported by the supplied dependency evidence or by a
+clear shared framework dependency.
+
+STRICT NODE TYPE RULE:
+node.type MUST be exactly one of:
 api, service, database, model, middleware, utility, test, other
 
-Allowed relationship types:
+NEVER use:
+data, controller, route, router, repository, config, application,
+handler, component, module.
+
+If something represents data storage, persistence, a database, an in-memory
+store, or a data layer, use "database".
+
+STRICT EDGE RULE:
+edge.relationship MUST be exactly one of:
 calls, imports, uses, stores, depends_on
 
-Return ONLY JSON matching the required schema.
+Keep the graph readable: approximately 4-10 meaningful components for a
+normal repository. Include a test component when test files are present.
 
-Repository analysis:
-${JSON.stringify(compactData)}
+Return a concise summary that explains the architecture and its main flow.
+
+Return ONLY JSON matching the schema.
 `;
 
-  const architecture =
-    await requestGroq(
+  try {
+    const response = await requestGroq(
       apiKey,
-      prompt
+      prompt + "\nSTATIC REPOSITORY EVIDENCE:\n" + JSON.stringify(compact)
     );
 
-  return enrichArchitecture(
-    architecture,
-    compactData
-  );
+    const normalized = normalizeArchitecture(response, analysis);
+    return finalizeArchitecture(normalized, analysis);
+  } catch (error) {
+    console.error("Groq architecture analysis failed:", error);
+
+    // The static analyzer is still a valid working fallback. This keeps the
+    // core hackathon flow alive if the LLM quota/schema is temporarily hit.
+    return finalizeArchitecture(
+      createDeterministicArchitecture(analysis),
+      analysis
+    );
+  }
 }
 
 async function requestGroq(
   apiKey: string,
   prompt: string
-): Promise<GroqArchitectureResponse> {
+): Promise<GroqResponse> {
   const response = await fetch(
     "https://api.groq.com/openai/v1/chat/completions",
     {
       method: "POST",
-
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-
       body: JSON.stringify({
         model: "openai/gpt-oss-20b",
-
         messages: [
           {
             role: "system",
             content:
-              "You are a strict JSON-only software architecture analyzer. Always return nodes, edges, and summary.",
+              "You are a strict JSON-only architecture extraction engine. Never output prose outside JSON.",
           },
-
-          {
-            role: "user",
-            content: prompt,
-          },
+          { role: "user", content: prompt },
         ],
-
         temperature: 0,
-
-        max_completion_tokens: 1800,
-
+        max_completion_tokens: 3500,
         reasoning_effort: "low",
-
         reasoning_format: "hidden",
-
         response_format: {
           type: "json_schema",
-
           json_schema: {
-            name: "architecture",
-
+            name: "archlens_architecture",
             strict: true,
-
             schema: {
               type: "object",
-
               properties: {
                 nodes: {
                   type: "array",
-
                   items: {
                     type: "object",
-
                     properties: {
-                      id: {
-                        type: "string",
-                      },
-
-                      label: {
-                        type: "string",
-                      },
-
+                      id: { type: "string" },
+                      label: { type: "string" },
                       type: {
                         type: "string",
-
-                        enum: [
-                          "api",
-                          "service",
-                          "database",
-                          "model",
-                          "middleware",
-                          "utility",
-                          "test",
-                          "other",
-                        ],
+                        enum: [...NODE_TYPES],
                       },
-
                       files: {
                         type: "array",
-
-                        items: {
-                          type: "string",
-                        },
+                        items: { type: "string" },
                       },
-
-                      description: {
-                        type: "string",
-                      },
+                      description: { type: "string" },
                     },
-
                     required: [
                       "id",
                       "label",
@@ -168,60 +189,28 @@ async function requestGroq(
                       "files",
                       "description",
                     ],
-
                     additionalProperties: false,
                   },
                 },
-
                 edges: {
                   type: "array",
-
                   items: {
                     type: "object",
-
                     properties: {
-                      source: {
-                        type: "string",
-                      },
-
-                      target: {
-                        type: "string",
-                      },
-
+                      source: { type: "string" },
+                      target: { type: "string" },
                       relationship: {
                         type: "string",
-
-                        enum: [
-                          "calls",
-                          "imports",
-                          "uses",
-                          "stores",
-                          "depends_on",
-                        ],
+                        enum: [...EDGE_TYPES],
                       },
                     },
-
-                    required: [
-                      "source",
-                      "target",
-                      "relationship",
-                    ],
-
+                    required: ["source", "target", "relationship"],
                     additionalProperties: false,
                   },
                 },
-
-                summary: {
-                  type: "string",
-                },
+                summary: { type: "string" },
               },
-
-              required: [
-                "nodes",
-                "edges",
-                "summary",
-              ],
-
+              required: ["nodes", "edges", "summary"],
               additionalProperties: false,
             },
           },
@@ -230,499 +219,328 @@ async function requestGroq(
     }
   );
 
-  if (!response.ok) {
-    const errorText =
-      await response.text();
+  const bodyText = await response.text();
 
-    throw new Error(
-      `Groq request failed: ${errorText}`
-    );
+  if (!response.ok) {
+    throw new Error(`Groq request failed: ${bodyText}`);
   }
 
-  const data =
-    await response.json();
-
-  const content =
-    data.choices?.[0]?.message?.content;
+  const data = JSON.parse(bodyText);
+  const content = data?.choices?.[0]?.message?.content;
 
   if (!content) {
-    throw new Error(
-      "Groq returned an empty architecture response."
-    );
+    throw new Error("Groq returned an empty architecture response.");
   }
 
-  return parseArchitectureResponse(
-    content
-  );
-}
-
-function parseArchitectureResponse(
-  content: string
-): GroqArchitectureResponse {
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    throw new Error(
-      `Groq returned invalid architecture JSON: ${content}`
-    );
-  }
+  const parsed = JSON.parse(content);
 
   if (
     !parsed ||
-    typeof parsed !== "object"
+    !Array.isArray(parsed.nodes) ||
+    !Array.isArray(parsed.edges) ||
+    typeof parsed.summary !== "string"
   ) {
-    throw new Error(
-      "Groq returned an invalid architecture object."
-    );
+    throw new Error("Groq returned an invalid architecture object.");
   }
 
-  const architecture =
-    parsed as Record<
-      string,
-      unknown
-    >;
-
-  if (
-    !Array.isArray(
-      architecture.nodes
-    )
-  ) {
-    throw new Error(
-      "Groq architecture response is missing 'nodes'."
-    );
-  }
-
-  if (
-    !Array.isArray(
-      architecture.edges
-    )
-  ) {
-    throw new Error(
-      "Groq architecture response is missing 'edges'."
-    );
-  }
-
-  if (
-    typeof architecture.summary !==
-      "string" ||
-    !architecture.summary.trim()
-  ) {
-    throw new Error(
-      "Groq architecture response is missing 'summary'."
-    );
-  }
-
-  return {
-    nodes:
-      architecture.nodes as Architecture["nodes"],
-
-    edges:
-      architecture.edges as Architecture["edges"],
-
-    summary:
-      architecture.summary,
-  };
+  return parsed;
 }
 
-/**
- * Keep the information sent to Groq intentionally small.
- */
-function createCompactRepositoryData(
-  repositoryData: unknown
-) {
-  if (
-    !repositoryData ||
-    typeof repositoryData !==
-      "object"
-  ) {
-    return {};
-  }
+function normalizeArchitecture(
+  response: GroqResponse,
+  analysis: RepositoryAnalysis
+): GroqResponse {
+  const validFiles = new Set(
+    analysis.files.map((file) => file.path)
+  );
+  const nodeIds = new Set<string>();
 
-  const data =
-    repositoryData as Record<
-      string,
-      any
-    >;
+  const nodes = response.nodes
+    .map((node, index) => {
+      const type = NODE_TYPES.includes(node.type as any)
+        ? node.type
+        : "other";
 
-  const files =
-    Array.isArray(data.files)
-      ? data.files
-          .slice(0, 30)
-          .map((file: any) => ({
-            path: file.path,
+      const files = node.files.filter((file) =>
+        validFiles.has(file)
+      );
 
-            language:
-              file.language,
+      const id =
+        node.id.trim() ||
+        `component-${index + 1}`;
 
-            layer: file.layer,
+      nodeIds.add(id);
 
-            entry:
-              Boolean(
-                file.isEntryPoint
-              ),
+      return {
+        id,
+        label: node.label.trim() || `Component ${index + 1}`,
+        type,
+        files,
+        description: node.description?.trim() || "Architecture component.",
+      };
+    })
+    .filter((node) => node.files.length > 0 || node.type === "other");
 
-            internal:
-              Array.isArray(
-                file.internalImports
-              )
-                ? file.internalImports.slice(
-                    0,
-                    6
-                  )
-                : [],
+  const validEdgeKeys = new Set<string>();
 
-            external:
-              Array.isArray(
-                file.externalImports
-              )
-                ? file.externalImports.slice(
-                    0,
-                    4
-                  )
-                : [],
-          }))
-      : [];
+  const edges = response.edges.filter((edge) => {
+    if (
+      !nodeIds.has(edge.source) ||
+      !nodeIds.has(edge.target) ||
+      edge.source === edge.target
+    ) {
+      return false;
+    }
 
-  const dependencies =
-    Array.isArray(
-      data.dependencies
-    )
-      ? data.dependencies
-          .slice(0, 80)
-          .map(
-            (dependency: any) => ({
-              source:
-                dependency.source,
+    if (!EDGE_TYPES.includes(edge.relationship as any)) {
+      return false;
+    }
 
-              target:
-                dependency.target,
-
-              type:
-                dependency.type,
-            })
-          )
-      : [];
+    const key = `${edge.source}|${edge.target}|${edge.relationship}`;
+    if (validEdgeKeys.has(key)) return false;
+    validEdgeKeys.add(key);
+    return true;
+  });
 
   return {
-    metrics:
-      data.metrics || {},
-
-    languages:
-      data.languages || {},
-
-    layers:
-      Array.isArray(
-        data.layers
-      )
-        ? data.layers
-        : [],
-
-    entryPoints:
-      Array.isArray(
-        data.entryPoints
-      )
-        ? data.entryPoints.slice(
-            0,
-            10
-          )
-        : [],
-
-    externalDependencies:
-      Array.isArray(
-        data.externalDependencies
-      )
-        ? data.externalDependencies.slice(
-            0,
-            15
-          )
-        : [],
-
-    files,
-
-    dependencies,
-  };
-}
-
-function enrichArchitecture(
-  architecture: Architecture,
-  repositoryData: any
-): Architecture {
-  const nodes =
-    Array.isArray(
-      architecture.nodes
-    )
-      ? architecture.nodes
-      : [];
-
-  const nodeIds =
-    new Set(
-      nodes.map(
-        (node) => node.id
-      )
-    );
-
-  const edges =
-    Array.isArray(
-      architecture.edges
-    )
-      ? architecture.edges.filter(
-          (edge) =>
-            nodeIds.has(
-              edge.source
-            ) &&
-            nodeIds.has(
-              edge.target
-            )
-        )
-      : [];
-
-  const risks =
-    detectRisks(
-      nodes,
-      edges,
-      repositoryData
-    );
-
-  const metrics =
-    createMetrics(
-      nodes.length,
-      edges.length,
-      risks,
-      repositoryData
-    );
-
-  const health =
-    calculateHealth(
-      nodes,
-      edges,
-      risks,
-      repositoryData
-    );
-
-  return {
-    ...architecture,
-
     nodes,
-
     edges,
-
-    risks,
-
-    health,
-
-    metrics,
+    summary:
+      response.summary.trim() ||
+      "Architecture extracted from the repository evidence.",
   };
 }
 
-function createMetrics(
-  componentCount: number,
-  relationshipCount: number,
-  risks: ArchitectureRisk[],
-  repositoryData: any
-): ArchitectureMetrics {
-  const sourceMetrics =
-    repositoryData?.metrics ||
-    {};
+function createDeterministicArchitecture(
+  analysis: RepositoryAnalysis
+): GroqResponse {
+  const groups = new Map<string, {
+    label: string;
+    type: ArchitectureNode["type"];
+    files: string[];
+  }>();
+
+  const groupFor = (file: any) => {
+    if (file.layer === "api") return ["api", "API Layer"] as const;
+    if (file.layer === "service") return ["service", "Services"] as const;
+    if (file.layer === "database") return ["database", "Data Layer"] as const;
+    if (file.layer === "model") return ["model", "Models"] as const;
+    if (file.layer === "middleware") return ["middleware", "Middleware"] as const;
+    if (file.layer === "test") return ["test", "Tests"] as const;
+    if (file.layer === "utility") return ["utility", "Utilities"] as const;
+    return ["other", "Supporting Modules"] as const;
+  };
+
+  for (const file of analysis.files) {
+    const [type, label] = groupFor(file);
+    if (!groups.has(label)) {
+      groups.set(label, { label, type, files: [] });
+    }
+    groups.get(label)!.files.push(file.path);
+  }
+
+  const nodes: ArchitectureNode[] = [...groups.entries()].map(
+    ([label, value]) => ({
+      id: slug(label),
+      label,
+      type: value.type,
+      files: value.files,
+      description: `Files identified in the ${label.toLowerCase()} layer.`,
+    })
+  );
+
+  const fileToNode = new Map<string, string>();
+  for (const node of nodes) {
+    for (const file of node.files) fileToNode.set(file, node.id);
+  }
+
+  const edges: ArchitectureEdge[] = [];
+  const seen = new Set<string>();
+
+  for (const dependency of analysis.dependencies) {
+    if (dependency.type !== "internal") continue;
+    const source = fileToNode.get(dependency.source);
+    const target = fileToNode.get(dependency.target);
+    if (!source || !target || source === target) continue;
+
+    const key = `${source}|${target}|imports`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    edges.push({
+      source,
+      target,
+      relationship: "imports",
+    });
+  }
+
+  const framework = detectFramework(analysis.externalDependencies);
+  if (framework) {
+    const id = slug(`${framework} Core`);
+    if (!nodes.some((node) => node.id === id)) {
+      nodes.push({
+        id,
+        label: `${framework} Core`,
+        type: "other",
+        files: [],
+        description: `Shared ${framework} dependency detected from external imports.`,
+      });
+    }
+
+    for (const node of nodes.filter((node) => node.id !== id).slice(0, 8)) {
+      edges.push({
+        source: node.id,
+        target: id,
+        relationship: "depends_on",
+      });
+    }
+  }
 
   return {
-    fileCount:
-      typeof sourceMetrics.fileCount ===
-      "number"
-        ? sourceMetrics.fileCount
-        : 0,
-
-    componentCount,
-
-    relationshipCount,
-
-    externalDependencyCount:
-      typeof sourceMetrics
-        .externalDependencyCount ===
-      "number"
-        ? sourceMetrics.externalDependencyCount
-        : 0,
-
-    entryPointCount:
-      typeof sourceMetrics.entryPointCount ===
-      "number"
-        ? sourceMetrics.entryPointCount
-        : 0,
-
-    layerCount:
-      typeof sourceMetrics.layerCount ===
-      "number"
-        ? sourceMetrics.layerCount
-        : 0,
-
-    highRiskCount:
-      risks.filter(
-        (risk) =>
-          risk.severity ===
-          "high"
-      ).length,
-
-    mediumRiskCount:
-      risks.filter(
-        (risk) =>
-          risk.severity ===
-          "medium"
-      ).length,
+    nodes,
+    edges,
+    summary:
+      "Architecture grouped from deterministic file, layer, import, and dependency evidence. The LLM semantic pass was unavailable for this analysis.",
   };
 }
 
-function detectRisks(
-  nodes: Architecture["nodes"],
-  edges: Architecture["edges"],
-  repositoryData: any
-): ArchitectureRisk[] {
-  const risks: ArchitectureRisk[] =
-    [];
+function detectFramework(dependencies: string[]) {
+  const known: Record<string, string> = {
+    express: "Express",
+    fastify: "Fastify",
+    koa: "Koa",
+    next: "Next.js",
+    react: "React",
+    vue: "Vue",
+    "@nestjs/common": "NestJS",
+    flask: "Flask",
+    django: "Django",
+    fastapi: "FastAPI",
+  };
 
-  const incoming =
-    new Map<string, number>();
+  return dependencies
+    .map((value) => value.toLowerCase())
+    .map((value) => known[value])
+    .find(Boolean);
+}
 
-  const outgoing =
-    new Map<string, number>();
+function slug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function finalizeArchitecture(
+  base: GroqResponse,
+  analysis: RepositoryAnalysis
+): Architecture {
+  const nodes = base.nodes;
+  const edges = base.edges;
+
+  const risks = calculateRisks(nodes, edges);
+  const health = calculateHealth(nodes, edges, risks);
+
+  const metrics = {
+    fileCount: analysis.metrics.fileCount || analysis.files.length,
+    componentCount: nodes.length,
+    relationshipCount: edges.length,
+    externalDependencyCount: analysis.metrics.externalDependencyCount || 0,
+    entryPointCount: analysis.metrics.entryPointCount || analysis.entryPoints.length,
+    layerCount: analysis.metrics.layerCount || analysis.layers.length,
+    highRiskCount: risks.filter((risk) => risk.severity === "high").length,
+    mediumRiskCount: risks.filter((risk) => risk.severity === "medium").length,
+  };
+
+  const architecture = {
+    nodes,
+    edges,
+    summary: base.summary,
+    mermaid: "",
+    health,
+    risks,
+    metrics,
+    files: analysis.files,
+    dependencies: analysis.dependencies,
+    languages: analysis.languages,
+    layers: analysis.layers,
+    entryPoints: analysis.entryPoints,
+    externalDependencies: analysis.externalDependencies,
+  };
+
+  architecture.mermaid = buildMermaid(architecture);
+  return architecture;
+}
+
+function calculateRisks(
+  nodes: ArchitectureNode[],
+  edges: ArchitectureEdge[]
+) {
+  const incoming = new Map<string, number>();
+  const outgoing = new Map<string, number>();
 
   for (const edge of edges) {
-    incoming.set(
-      edge.target,
-      (incoming.get(
-        edge.target
-      ) || 0) + 1
-    );
-
-    outgoing.set(
-      edge.source,
-      (outgoing.get(
-        edge.source
-      ) || 0) + 1
-    );
+    incoming.set(edge.target, (incoming.get(edge.target) || 0) + 1);
+    outgoing.set(edge.source, (outgoing.get(edge.source) || 0) + 1);
   }
 
-  for (const [
-    component,
-    count,
-  ] of incoming) {
-    if (count >= 8) {
-      risks.push({
-        id: `high-fan-in-${component}`,
-
-        severity: "high",
-
-        title:
-          "Highly centralized dependency",
-
-        component,
-
-        description:
-          "Many architectural components depend on this component, increasing its potential impact on changes.",
-
-        evidence: [
-          `${count} incoming architectural relationships were detected.`,
-        ],
-
-        recommendation:
-          "Review whether this component contains too many responsibilities or should be split into smaller boundaries.",
-      });
-    } else if (count >= 5) {
-      risks.push({
-        id: `fan-in-${component}`,
-
-        severity: "medium",
-
-        title:
-          "High dependency fan-in",
-
-        component,
-
-        description:
-          "Several components depend on this component, so changes here may affect multiple areas.",
-
-        evidence: [
-          `${count} incoming architectural relationships were detected.`,
-        ],
-
-        recommendation:
-          "Review the component's responsibilities and keep its public interface stable.",
-      });
-    }
-  }
-
-  for (const [
-    component,
-    count,
-  ] of outgoing) {
-    if (count >= 8) {
-      risks.push({
-        id: `high-fan-out-${component}`,
-
-        severity: "high",
-
-        title:
-          "Highly coupled component",
-
-        component,
-
-        description:
-          "This component depends on many other components, which can make changes harder to isolate.",
-
-        evidence: [
-          `${count} outgoing architectural relationships were detected.`,
-        ],
-
-        recommendation:
-          "Consider separating orchestration responsibilities from domain logic.",
-      });
-    } else if (count >= 5) {
-      risks.push({
-        id: `fan-out-${component}`,
-
-        severity: "medium",
-
-        title:
-          "High dependency fan-out",
-
-        component,
-
-        description:
-          "This component depends on several other components.",
-
-        evidence: [
-          `${count} outgoing architectural relationships were detected.`,
-        ],
-
-        recommendation:
-          "Review whether the component has too many responsibilities.",
-      });
-    }
-  }
+  const risks: Architecture["risks"] = [];
 
   for (const node of nodes) {
-    if (
-      node.files.length >= 12
-    ) {
+    const inCount = incoming.get(node.id) || 0;
+    const outCount = outgoing.get(node.id) || 0;
+
+    if (inCount >= 7) {
       risks.push({
-        id: `large-component-${node.id}`,
-
-        severity: "medium",
-
-        title:
-          "Large architectural component",
-
+        id: `fan-in-${node.id}`,
+        severity: "high",
+        title: "Central dependency hotspot",
         component: node.id,
-
         description:
-          "A large number of files have been grouped into this component.",
-
-        evidence: [
-          `${node.files.length} files belong to this component.`,
-        ],
-
+          "Many components depend on this component, so changes here can have a wide impact.",
+        evidence: [`${inCount} incoming relationships detected.`],
         recommendation:
-          "Review whether the component contains multiple responsibilities that could be separated.",
+          "Review responsibilities and consider whether the boundary is too broad.",
+      });
+    } else if (inCount >= 4) {
+      risks.push({
+        id: `fan-in-${node.id}`,
+        severity: "medium",
+        title: "High dependency fan-in",
+        component: node.id,
+        description:
+          "Several components depend on this component.",
+        evidence: [`${inCount} incoming relationships detected.`],
+        recommendation:
+          "Keep the component interface stable and review its responsibilities.",
+      });
+    }
+
+    if (outCount >= 7) {
+      risks.push({
+        id: `fan-out-${node.id}`,
+        severity: "high",
+        title: "Highly coupled component",
+        component: node.id,
+        description:
+          "This component depends on many other components.",
+        evidence: [`${outCount} outgoing relationships detected.`],
+        recommendation:
+          "Review orchestration responsibilities and possible separation.",
+      });
+    }
+
+    if (node.files.length >= 15) {
+      risks.push({
+        id: `large-${node.id}`,
+        severity: "medium",
+        title: "Large component boundary",
+        component: node.id,
+        description:
+          "A large number of files were grouped into this component.",
+        evidence: [`${node.files.length} files belong to the component.`],
+        recommendation:
+          "Check whether the group contains multiple responsibilities.",
       });
     }
   }
@@ -731,132 +549,30 @@ function detectRisks(
 }
 
 function calculateHealth(
-  nodes: Architecture["nodes"],
-  edges: Architecture["edges"],
-  risks: ArchitectureRisk[],
-  repositoryData: any
+  nodes: ArchitectureNode[],
+  edges: ArchitectureEdge[],
+  risks: Architecture["risks"]
 ) {
   let score = 100;
+  score -= risks.filter((risk) => risk.severity === "high").length * 12;
+  score -= risks.filter((risk) => risk.severity === "medium").length * 5;
 
-  const highRisks =
-    risks.filter(
-      (risk) =>
-        risk.severity ===
-        "high"
-    ).length;
+  if (nodes.length > 0 && edges.length === 0) score -= 10;
 
-  const mediumRisks =
-    risks.filter(
-      (risk) =>
-        risk.severity ===
-        "medium"
-    ).length;
-
-  score -=
-    highRisks * 12;
-
-  score -=
-    mediumRisks * 5;
-
-  if (nodes.length === 0) {
-    score -= 30;
-  }
-
-  if (nodes.length > 20) {
-    score -= 5;
-  }
-
-  if (
-    edges.length === 0 &&
-    nodes.length > 1
-  ) {
-    score -= 10;
-  }
-
-  score = Math.max(
-    0,
-    Math.min(100, score)
-  );
-
-  const strengths: string[] =
-    [];
-
-  const concerns: string[] =
-    [];
-
-  if (nodes.length > 0) {
-    strengths.push(
-      `${nodes.length} meaningful architectural components were identified.`
-    );
-  }
-
-  if (edges.length > 0) {
-    strengths.push(
-      `${edges.length} architectural relationships were detected from the dependency structure.`
-    );
-  }
-
-  if (
-    repositoryData?.entryPoints
-      ?.length
-  ) {
-    strengths.push(
-      `${repositoryData.entryPoints.length} potential entry points were identified.`
-    );
-  }
-
-  if (highRisks > 0) {
-    concerns.push(
-      `${highRisks} high-severity structural risk${
-        highRisks === 1
-          ? ""
-          : "s"
-      } detected.`
-    );
-  }
-
-  if (mediumRisks > 0) {
-    concerns.push(
-      `${mediumRisks} medium-severity structural concern${
-        mediumRisks === 1
-          ? ""
-          : "s"
-      } detected.`
-    );
-  }
-
-  if (
-    edges.length === 0 &&
-    nodes.length > 1
-  ) {
-    concerns.push(
-      "Few or no relationships could be established between the detected components."
-    );
-  }
-
-  let summary: string;
-
-  if (score >= 90) {
-    summary =
-      "The analyzed repository shows a relatively clear architectural structure with limited detected coupling concerns.";
-  } else if (score >= 75) {
-    summary =
-      "The analyzed repository is generally structured clearly, with some areas that deserve attention.";
-  } else if (score >= 60) {
-    summary =
-      "The analyzed repository has moderate structural complexity and several areas worth reviewing.";
-  } else {
-    summary =
-      "The analyzed repository shows significant structural complexity or coupling in the analyzed files.";
-  }
+  score = Math.max(0, Math.min(100, score));
 
   return {
     score,
-
-    summary,
-
-    strengths,
-
-    concerns,
+    summary:
+      score >= 85
+        ? "The extracted architecture has relatively clear boundaries."
+        : score >= 70
+          ? "The extracted architecture is understandable with some coupling hotspots."
+          : "The extracted architecture contains several structural hotspots.",
+    strengths: [
+      `${nodes.length} architecture components identified.`,
+      `${edges.length} component relationships identified.`,
+    ],
+    concerns: risks.slice(0, 3).map((risk) => risk.title),
   };
 }

@@ -1,159 +1,123 @@
-import { Octokit } from "@octokit/rest";
+import type { RepositoryFile } from "./types";
 
-const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN,
-});
+const API = "https://api.github.com";
 
-export function parseGitHubUrl(url: string) {
-  let parsedUrl: URL;
-
-  try {
-    parsedUrl = new URL(url.trim());
-  } catch {
-    throw new Error(
-      "Please enter a valid GitHub repository URL."
-    );
+function parseGitHubUrl(value: string) {
+  const url = new URL(value.trim());
+  if (url.hostname !== "github.com") {
+    throw new Error("Please provide a github.com repository URL.");
   }
-
-  if (
-    parsedUrl.hostname !== "github.com" &&
-    parsedUrl.hostname !== "www.github.com"
-  ) {
-    throw new Error(
-      "Please enter a GitHub repository URL, for example: https://github.com/psf/requests"
-    );
-  }
-
-  const parts = parsedUrl.pathname
-    .split("/")
-    .filter(Boolean);
-
+  const parts = url.pathname.split("/").filter(Boolean);
   if (parts.length < 2) {
-    throw new Error(
-      "Please enter a complete GitHub repository URL, for example: https://github.com/psf/requests"
-    );
+    throw new Error("GitHub URL must look like https://github.com/owner/repository");
   }
-
-  const owner = parts[0];
-  const repo = parts[1]
-    .replace(/\.git$/, "")
-    .trim();
-
-  if (!owner || !repo) {
-    throw new Error(
-      "Could not determine the GitHub owner and repository."
-    );
-  }
-
-  return {
-    owner,
-    repo,
-  };
+  return { owner: parts[0], repo: parts[1].replace(/\.git$/, "") };
 }
 
-export async function getRepositoryFiles(url: string) {
-  const { owner, repo } = parseGitHubUrl(url);
+async function githubFetch(
+  path: string,
+  token?: string
+): Promise<Response> {
+  return fetch(`${API}${path}`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "ArchLens",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    cache: "no-store",
+  });
+}
 
-  let response;
+export async function getRepositoryFiles(
+  githubUrl: string
+): Promise<{ owner: string; repo: string; files: RepositoryFile[] }> {
+  const { owner, repo } = parseGitHubUrl(githubUrl);
+  const token = process.env.GITHUB_TOKEN;
 
-  try {
-    response = await octokit.rest.git.getTree({
-      owner,
-      repo,
-      tree_sha: "HEAD",
-      recursive: "true",
-    });
-  } catch (error: any) {
-    console.error("GitHub repository error:", error);
+  const repoResponse = await githubFetch(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+    token
+  );
 
-    const status = error?.status;
-
-    if (status === 404) {
-      throw new Error(
-        `Repository "${owner}/${repo}" was not found or cannot be accessed. Make sure the repository is public and the URL is correct.`
-      );
-    }
-
-    if (status === 403) {
-      throw new Error(
-        "GitHub access was denied or the API rate limit was reached. Please try again later."
-      );
-    }
-
-    if (status === 401) {
-      throw new Error(
-        "GitHub authentication failed. Please check your GITHUB_TOKEN."
-      );
-    }
-
+  if (!repoResponse.ok) {
+    const body = await repoResponse.text();
     throw new Error(
-      "Unable to access this GitHub repository."
+      `GitHub repository request failed (${repoResponse.status}): ${body.slice(0, 300)}`
     );
   }
 
-  const files = response.data.tree
-    .filter(
-      (item) =>
-        item.type === "blob" &&
-        item.path &&
-        !item.path.includes("node_modules") &&
-        !item.path.includes(".git") &&
-        !item.path.includes("__pycache__") &&
-        !item.path.includes(".venv") &&
-        !item.path.includes("venv") &&
-        !item.path.includes("dist") &&
-        !item.path.includes("build")
-    )
-    .filter((item) =>
-      /\.(py|js|ts|tsx|jsx|json)$/.test(item.path || "")
-    );
+  const repoData = await repoResponse.json();
+  const branch = repoData.default_branch || "main";
 
-  if (files.length === 0) {
+  const treeResponse = await githubFetch(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+    token
+  );
+
+  if (!treeResponse.ok) {
+    throw new Error(`Could not read the repository tree (${treeResponse.status}).`);
+  }
+
+  const treeData = await treeResponse.json();
+
+  if (treeData.truncated) {
     throw new Error(
-      "No supported source files were found. ArchLens currently supports Python, JavaScript, and TypeScript repositories."
+      "GitHub returned a truncated repository tree. Try a smaller repository."
     );
   }
 
-  const results = [];
+  const candidates = (treeData.tree || [])
+    .filter((item: any) => item.type === "blob")
+    .map((item: any) => item.path as string)
+    .filter(isUsefulSourceFile)
+    .slice(0, 120);
 
-  for (const file of files.slice(0, 50)) {
-    if (!file.path) continue;
+  const files: RepositoryFile[] = [];
+
+  for (const path of candidates) {
+    const blobResponse = await githubFetch(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(branch)}`,
+      token
+    );
+
+    if (!blobResponse.ok) continue;
+
+    const blob = await blobResponse.json();
+
+    if (blob.encoding !== "base64" || typeof blob.content !== "string") {
+      continue;
+    }
 
     try {
-      const contentResponse =
-        await octokit.rest.repos.getContent({
-          owner,
-          repo,
-          path: file.path,
-        });
-
-      if (
-        !Array.isArray(contentResponse.data) &&
-        "content" in contentResponse.data
-      ) {
-        const content = Buffer.from(
-          contentResponse.data.content,
-          "base64"
-        ).toString("utf-8");
-
-        results.push({
-          path: file.path,
-          content,
-        });
+      const content = Buffer.from(blob.content, "base64").toString("utf8");
+      if (content.length <= 120_000) {
+        files.push({ path, content });
       }
-    } catch (error) {
-      console.warn(
-        `Could not read file: ${file.path}`,
-        error
-      );
+    } catch {
+      // Ignore binary/unreadable files.
     }
   }
 
-  if (results.length === 0) {
-    throw new Error(
-      "The repository was found, but ArchLens could not read any supported source files."
-    );
+  if (files.length === 0) {
+    throw new Error("No readable source files were found in the repository.");
   }
 
-  return results;
+  return { owner, repo, files };
+}
+
+function isUsefulSourceFile(path: string) {
+  const lower = path.toLowerCase();
+
+  if (
+    lower.includes("node_modules/") ||
+    lower.includes(".git/") ||
+    lower.includes("dist/") ||
+    lower.includes("build/") ||
+    lower.includes(".next/") ||
+    lower.includes("coverage/")
+  ) {
+    return false;
+  }
+
+  return /\.(py|js|jsx|ts|tsx|mjs|cjs|json)$/.test(lower);
 }

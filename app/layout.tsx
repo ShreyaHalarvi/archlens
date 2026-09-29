@@ -1,16 +1,14 @@
-import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "ArchLens",
-  description: "AI-powered codebase architecture visualizer",
+export const metadata = {
+  title: "ArchLens — Code-to-Diagram Architecture Visualizer",
+  description:
+    "Turn a GitHub backend repository into an evidence-grounded architecture diagram and Mermaid.js source.",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body>{children}</body>

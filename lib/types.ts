@@ -6,10 +6,10 @@ export type RepositoryFile = {
 export type AnalyzedFile = {
   path: string;
   language: string;
+  layer: string;
   imports: string[];
   internalImports: string[];
   externalImports: string[];
-  layer: string;
   isEntryPoint: boolean;
 };
 
@@ -32,7 +32,7 @@ export type ArchitectureNode = {
     | "test"
     | "other";
   files: string[];
-  description?: string;
+  description: string;
 };
 
 export type ArchitectureEdge = {
@@ -56,13 +56,6 @@ export type ArchitectureRisk = {
   recommendation: string;
 };
 
-export type ArchitectureHealth = {
-  score: number;
-  summary: string;
-  strengths: string[];
-  concerns: string[];
-};
-
 export type ArchitectureMetrics = {
   fileCount: number;
   componentCount: number;
@@ -74,15 +67,25 @@ export type ArchitectureMetrics = {
   mediumRiskCount: number;
 };
 
+export type ArchitectureHealth = {
+  score: number;
+  summary: string;
+  strengths: string[];
+  concerns: string[];
+};
+
 export type Architecture = {
   nodes: ArchitectureNode[];
   edges: ArchitectureEdge[];
   summary: string;
-  health?: ArchitectureHealth;
-  risks?: ArchitectureRisk[];
-  metrics?: ArchitectureMetrics;
-
-  // Detailed static-analysis evidence used by the Codebase Map.
-  files?: AnalyzedFile[];
-  dependencies?: Dependency[];
+  mermaid: string;
+  health: ArchitectureHealth;
+  risks: ArchitectureRisk[];
+  metrics: ArchitectureMetrics;
+  files: AnalyzedFile[];
+  dependencies: Dependency[];
+  languages: Record<string, number>;
+  layers: string[];
+  entryPoints: string[];
+  externalDependencies: string[];
 };

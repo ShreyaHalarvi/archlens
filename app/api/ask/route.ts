@@ -2,98 +2,87 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-
-    const architecture = body.architecture;
-    const question = body.question;
+    const { architecture, question } = await request.json();
 
     if (!architecture) {
       return NextResponse.json(
-        { error: "Architecture data is required" },
+        { success: false, error: "Architecture data is required." },
         { status: 400 }
       );
     }
 
-    if (!question || !question.trim()) {
+    if (!question?.trim()) {
       return NextResponse.json(
-        { error: "Question is required" },
+        { success: false, error: "Question is required." },
         { status: 400 }
       );
     }
 
     const apiKey = process.env.GROQ_API_KEY;
-
     if (!apiKey) {
       return NextResponse.json(
-        { error: "GROQ_API_KEY is missing" },
+        { success: false, error: "GROQ_API_KEY is missing." },
         { status: 500 }
       );
     }
 
-    const prompt = `
-You are ArchLens, an AI software architecture assistant.
-
-A developer is exploring an existing codebase and has asked a question
-about its architecture.
-
-Use ONLY the architecture information provided below.
-
-Do not invent files, components, dependencies, or behavior that is not
-supported by the provided information.
-
-Architecture:
-${JSON.stringify(architecture, null, 2)}
-
-Developer question:
-${question}
-
-Answer clearly and practically.
-
-If the architecture information is not sufficient to answer the
-question with confidence, explicitly say that the available
-architecture information is insufficient.
-
-Mention relevant components and files when they are available.
-`;
+    const context = {
+      summary: architecture.summary,
+      nodes: (architecture.nodes || []).slice(0, 25).map((node: any) => ({
+        id: node.id,
+        label: node.label,
+        type: node.type,
+        files: (node.files || []).slice(0, 8),
+        description: node.description,
+      })),
+      edges: (architecture.edges || []).slice(0, 50),
+      metrics: architecture.metrics,
+      risks: (architecture.risks || []).slice(0, 8),
+    };
 
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
-
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-
         body: JSON.stringify({
           model: "openai/gpt-oss-20b",
-
           messages: [
             {
+              role: "system",
+              content:
+                "You are ArchLens, a precise software architecture assistant. Answer only from the supplied architecture.",
+            },
+            {
               role: "user",
-              content: prompt,
+              content: `Developer question:\n${question}\n\nArchitecture evidence:\n${JSON.stringify(context)}\n\nDo not invent files, components, dependencies, or implementation details. If the evidence is insufficient, say so.`,
             },
           ],
-
           temperature: 0.2,
-
+          max_completion_tokens: 1000,
           reasoning_effort: "low",
-
           reasoning_format: "hidden",
         }),
       }
     );
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    const text = await response.text();
 
-      throw new Error(`Groq request failed: ${errorText}`);
+    if (!response.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: extractGroqError(text),
+        },
+        { status: response.status }
+      );
     }
 
-    const data = await response.json();
-
-    const answer = data.choices?.[0]?.message?.content;
+    const data = JSON.parse(text);
+    const answer = data?.choices?.[0]?.message?.content;
 
     if (!answer) {
       throw new Error("Groq returned an empty answer.");
@@ -101,20 +90,26 @@ Mention relevant components and files when they are available.
 
     return NextResponse.json({
       success: true,
-      answer,
+      answer: answer.trim(),
     });
   } catch (error) {
-    console.error("Codebase Q&A error:", error);
-
     return NextResponse.json(
       {
         success: false,
         error:
           error instanceof Error
             ? error.message
-            : "Failed to answer the question",
+            : "Failed to answer the question.",
       },
       { status: 500 }
     );
+  }
+}
+
+function extractGroqError(text: string) {
+  try {
+    return JSON.parse(text)?.error?.message || "Groq request failed.";
+  } catch {
+    return "Groq request failed.";
   }
 }

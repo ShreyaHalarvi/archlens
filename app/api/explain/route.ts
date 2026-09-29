@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
+import type { Architecture } from "@/lib/types";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const architecture = body.architecture;
+    const architecture = body.architecture as Architecture | undefined;
 
     if (!architecture) {
       return NextResponse.json(
-        { error: "Architecture data is required" },
+        { error: "Architecture is required." },
         { status: 400 }
       );
     }
@@ -16,33 +17,90 @@ export async function POST(request: Request) {
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: "GROQ_API_KEY is missing" },
+        { error: "GROQ_API_KEY is missing." },
         { status: 500 }
       );
     }
 
+    const compactArchitecture = {
+      summary: architecture.summary,
+
+      metrics: architecture.metrics,
+
+      nodes: architecture.nodes.slice(0, 12).map((node) => ({
+        id: node.id,
+        label: node.label,
+        type: node.type,
+        description: node.description,
+        files: node.files.slice(0, 8),
+      })),
+
+      edges: architecture.edges.slice(0, 30).map((edge) => ({
+        source: edge.source,
+        target: edge.target,
+        relationship: edge.relationship,
+      })),
+
+      entryPoints: architecture.entryPoints.slice(0, 10),
+
+      risks: architecture.risks.slice(0, 8).map((risk) => ({
+        title: risk.title,
+        severity: risk.severity,
+        component: risk.component,
+        description: risk.description,
+      })),
+    };
+
     const prompt = `
-You are an expert software architect.
+You are ArchLens, an architecture onboarding assistant.
 
-Explain the following software architecture to a developer
-who is new to this codebase.
+Analyze the provided repository architecture evidence and create a concise developer briefing.
 
-Architecture:
+Your response MUST use exactly these Markdown sections:
 
-${JSON.stringify(architecture, null, 2)}
+## Architecture Pattern
 
-Provide a concise explanation covering:
+Identify the overall architectural structure in 1-2 sentences.
 
-1. Overall architecture
-2. Main components and their responsibilities
-3. How the components interact
-4. Important dependencies or data flow
-5. Where a new developer should start exploring the codebase
+## Request / Data Flow
 
-Keep the explanation practical and easy to understand.
+Show the main flow as a short arrow chain using the actual components.
 
-Do not invent components or behavior that are not present
-in the provided architecture.
+Example:
+API → Service → Database → Response
+
+## Key Components
+
+Give 3-6 bullet points.
+
+Each bullet should contain:
+- component name
+- role
+- important files when useful
+
+## Developer Starting Points
+
+Give 3-5 numbered steps telling a new developer what to inspect first.
+
+## Architecture Notes
+
+Give 2-4 concise bullets about important dependencies, entry points, or structural risks.
+
+Rules:
+- Stay grounded in the supplied evidence.
+- Do not invent files, components, dependencies, or behavior.
+- Prefer actual component names from the evidence.
+- Use actual file paths from the evidence.
+- Do not write a generic software architecture tutorial.
+- Do not include greetings or a conclusion.
+- Keep the response under 700 words.
+- Use Markdown formatting.
+- Use inline code for file paths.
+- If evidence is insufficient for a claim, omit the claim.
+
+Repository architecture evidence:
+
+${JSON.stringify(compactArchitecture, null, 2)}
 `;
 
     const response = await fetch(
@@ -60,12 +118,19 @@ in the provided architecture.
 
           messages: [
             {
+              role: "system",
+              content:
+                "You are a concise software architecture onboarding assistant. Stay strictly grounded in the supplied repository evidence.",
+            },
+            {
               role: "user",
               content: prompt,
             },
           ],
 
-          temperature: 0.2,
+          temperature: 0,
+
+          max_completion_tokens: 1400,
 
           reasoning_effort: "low",
 
@@ -77,31 +142,34 @@ in the provided architecture.
     if (!response.ok) {
       const errorText = await response.text();
 
-      throw new Error(`Groq request failed: ${errorText}`);
+      throw new Error(
+        `Groq request failed: ${errorText}`
+      );
     }
 
     const data = await response.json();
 
-    const explanation = data.choices?.[0]?.message?.content;
+    const explanation =
+      data.choices?.[0]?.message?.content;
 
     if (!explanation) {
-      throw new Error("Groq returned an empty explanation.");
+      throw new Error(
+        "Groq returned an empty architecture explanation."
+      );
     }
 
     return NextResponse.json({
-      success: true,
       explanation,
     });
   } catch (error) {
-    console.error("Architecture explanation error:", error);
+    console.error("Explain route error:", error);
 
     return NextResponse.json(
       {
-        success: false,
         error:
           error instanceof Error
             ? error.message
-            : "Failed to explain architecture",
+            : "Failed to generate architecture explanation.",
       },
       { status: 500 }
     );
