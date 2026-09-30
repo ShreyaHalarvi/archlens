@@ -54,7 +54,9 @@ export default function ArchitectureWorkspace({
       setExplanation(data.explanation);
     } catch (error) {
       setExplanation(
-        error instanceof Error ? error.message : "Failed to explain architecture."
+        error instanceof Error
+          ? error.message
+          : "Failed to explain architecture."
       );
     } finally {
       setBusy("");
@@ -83,7 +85,9 @@ export default function ArchitectureWorkspace({
       setAnswer(data.answer);
     } catch (error) {
       setAnswer(
-        error instanceof Error ? error.message : "Failed to answer question."
+        error instanceof Error
+          ? error.message
+          : "Failed to answer question."
       );
     } finally {
       setBusy("");
@@ -93,6 +97,12 @@ export default function ArchitectureWorkspace({
   const dependencyCount = architecture.dependencies.filter(
     (item) => item.type === "internal"
   ).length;
+
+  const cycleCount =
+    architecture.issues.circularDependencies.length;
+
+  const unusedCount =
+    architecture.issues.deadFiles.length;
 
   const codebaseGroups = useMemo(
     () =>
@@ -107,7 +117,9 @@ export default function ArchitectureWorkspace({
 
   async function copyMermaid() {
     try {
-      await navigator.clipboard.writeText(architecture.mermaid);
+      await navigator.clipboard.writeText(
+        architecture.mermaid
+      );
     } catch {
       // Clipboard access can be blocked by browser permissions.
     }
@@ -134,8 +146,12 @@ export default function ArchitectureWorkspace({
     <section className="workspace">
       <div className="workspace-head">
         <div>
-          <div className="eyebrow">ARCHITECTURE VISUALIZATION</div>
+          <div className="eyebrow">
+            ARCHITECTURE VISUALIZATION
+          </div>
+
           <h2>Explore the codebase</h2>
+
           <p>{architecture.summary}</p>
         </div>
 
@@ -144,29 +160,96 @@ export default function ArchitectureWorkspace({
           onClick={explain}
           disabled={busy === "explain"}
         >
-          {busy === "explain" ? "Explaining…" : "Explain Architecture"}
+          {busy === "explain"
+            ? "Explaining…"
+            : "Explain Architecture"}
         </button>
       </div>
 
       <div className="stats-row">
-        <Stat value={architecture.metrics.fileCount} label="Files" />
-        <Stat value={architecture.metrics.componentCount} label="Components" />
-        <Stat value={architecture.metrics.relationshipCount} label="Relations" />
+        <Stat
+          value={architecture.metrics.fileCount}
+          label="Files"
+        />
+
+        <Stat
+          value={architecture.metrics.componentCount}
+          label="Components"
+        />
+
+        <Stat
+          value={architecture.metrics.relationshipCount}
+          label="Relations"
+        />
+
         <Stat
           value={architecture.metrics.externalDependencyCount}
           label="External deps"
         />
+
         <Stat
           value={architecture.metrics.entryPointCount}
           label="Entry points"
         />
+
+        <Stat
+          value={cycleCount}
+          label="Cycles"
+          warning={cycleCount > 0}
+        />
+
+        <Stat
+          value={unusedCount}
+          label="Unused candidates"
+          warning={unusedCount > 0}
+        />
       </div>
+
+      {(cycleCount > 0 || unusedCount > 0) && (
+        <div className="issue-banner">
+          <div>
+            <div className="eyebrow">
+              SURPRISE CHALLENGE DETECTION
+            </div>
+
+            <h3>
+              Architecture issues detected
+            </h3>
+
+            <p>
+              ArchLens found structural issues in the
+              repository and visually flagged them in
+              the generated Mermaid architecture.
+            </p>
+          </div>
+
+          <div className="issue-summary">
+            {cycleCount > 0 && (
+              <span className="issue-pill cycle">
+                🔴 {cycleCount} cycle
+                {cycleCount !== 1 ? "s" : ""}
+              </span>
+            )}
+
+            {unusedCount > 0 && (
+              <span className="issue-pill dead">
+                🟠 {unusedCount} unused candidate
+                {unusedCount !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="tabs">
         {tabs.map((item) => (
           <button
             key={item.id}
-            className={tab === item.id ? "tab active" : "tab"}
+            className={
+              tab === item.id
+                ? "tab active"
+                : "tab"
+            }
             onClick={() => setTab(item.id)}
           >
             {item.label}
@@ -176,13 +259,20 @@ export default function ArchitectureWorkspace({
 
       {tab === "architecture" && (
         <div className="panel-stack">
-          <MermaidView code={architecture.mermaid} />
+          <MermaidView
+            code={architecture.mermaid}
+          />
 
           <div className="component-grid">
             {architecture.nodes.map((node) => (
-              <article className="component-card" key={node.id}>
+              <article
+                className="component-card"
+                key={node.id}
+              >
                 <div className="component-top">
-                  <span className={`type-badge ${node.type}`}>
+                  <span
+                    className={`type-badge ${node.type}`}
+                  >
                     {node.type}
                   </span>
 
@@ -192,15 +282,22 @@ export default function ArchitectureWorkspace({
                 </div>
 
                 <h3>{node.label}</h3>
+
                 <p>{node.description}</p>
 
                 <div className="file-list">
-                  {node.files.slice(0, 4).map((file) => (
-                    <code key={file}>{file}</code>
-                  ))}
+                  {node.files
+                    .slice(0, 4)
+                    .map((file) => (
+                      <code key={file}>
+                        {file}
+                      </code>
+                    ))}
 
                   {node.files.length > 4 && (
-                    <span>+ {node.files.length - 4} more</span>
+                    <span>
+                      + {node.files.length - 4} more
+                    </span>
                   )}
                 </div>
               </article>
@@ -213,25 +310,43 @@ export default function ArchitectureWorkspace({
         <div className="panel">
           <div className="panel-title-row">
             <div>
-              <div className="eyebrow">CONCRETE EVIDENCE</div>
-              <h3>Internal file dependencies</h3>
+              <div className="eyebrow">
+                CONCRETE EVIDENCE
+              </div>
+
+              <h3>
+                Internal file dependencies
+              </h3>
             </div>
 
-            <span className="count-pill">{dependencyCount} imports</span>
+            <span className="count-pill">
+              {dependencyCount} imports
+            </span>
           </div>
 
           <div className="dependency-list">
             {architecture.dependencies
-              .filter((item) => item.type === "internal")
+              .filter(
+                (item) =>
+                  item.type === "internal"
+              )
               .slice(0, 80)
               .map((dependency, index) => (
                 <div
                   className="dependency-row"
                   key={`${dependency.source}-${dependency.target}-${index}`}
                 >
-                  <code>{dependency.source}</code>
-                  <span>→ imports →</span>
-                  <code>{dependency.target}</code>
+                  <code>
+                    {dependency.source}
+                  </code>
+
+                  <span>
+                    → imports →
+                  </span>
+
+                  <code>
+                    {dependency.target}
+                  </code>
                 </div>
               ))}
           </div>
@@ -241,9 +356,14 @@ export default function ArchitectureWorkspace({
       {tab === "codebase" && (
         <div className="component-grid">
           {codebaseGroups.map((group) => (
-            <article className="component-card" key={group.id}>
+            <article
+              className="component-card"
+              key={group.id}
+            >
               <div className="component-top">
-                <span className={`type-badge ${group.type}`}>
+                <span
+                  className={`type-badge ${group.type}`}
+                >
                   {group.type}
                 </span>
 
@@ -253,11 +373,15 @@ export default function ArchitectureWorkspace({
               </div>
 
               <h3>{group.label}</h3>
+
               <p>{group.description}</p>
 
               <div className="file-list expanded">
                 {group.fileObjects.map((file) => (
-                  <div className="file-row" key={file.path}>
+                  <div
+                    className="file-row"
+                    key={file.path}
+                  >
                     <code>{file.path}</code>
                     <span>{file.layer}</span>
                   </div>
@@ -276,26 +400,41 @@ export default function ArchitectureWorkspace({
             </div>
           ) : (
             architecture.risks.map((risk) => (
-              <article className="risk-card" key={risk.id}>
+              <article
+                className="risk-card"
+                key={risk.id}
+              >
                 <div className="risk-top">
-                  <span className={`severity ${risk.severity}`}>
+                  <span
+                    className={`severity ${risk.severity}`}
+                  >
                     {risk.severity}
                   </span>
 
-                  <code>{risk.component}</code>
+                  <code>
+                    {risk.component}
+                  </code>
                 </div>
 
                 <h3>{risk.title}</h3>
+
                 <p>{risk.description}</p>
 
                 <div className="evidence">
                   {risk.evidence.map((item) => (
-                    <span key={item}>• {item}</span>
+                    <span key={item}>
+                      • {item}
+                    </span>
                   ))}
                 </div>
 
-                <strong>Recommendation</strong>
-                <p>{risk.recommendation}</p>
+                <strong>
+                  Recommendation
+                </strong>
+
+                <p>
+                  {risk.recommendation}
+                </p>
               </article>
             ))
           )}
@@ -306,39 +445,57 @@ export default function ArchitectureWorkspace({
         <div className="panel">
           <div className="panel-title-row">
             <div>
-              <div className="eyebrow">CHALLENGE OUTPUT</div>
+              <div className="eyebrow">
+                CHALLENGE OUTPUT
+              </div>
 
-              <h3>Generated Mermaid.js source</h3>
+              <h3>
+                Generated Mermaid.js source
+              </h3>
 
               <p>
-                This source was generated from the analyzed repository
-                architecture.
+                This source was generated from the
+                analyzed repository architecture.
               </p>
             </div>
 
             <div className="button-row">
-              <button className="secondary-button" onClick={copyMermaid}>
+              <button
+                className="secondary-button"
+                onClick={copyMermaid}
+              >
                 Copy Mermaid
               </button>
 
-              <button className="primary-button" onClick={downloadMermaid}>
+              <button
+                className="primary-button"
+                onClick={downloadMermaid}
+              >
                 Download .mmd
               </button>
             </div>
           </div>
 
-          <pre className="code-block">{architecture.mermaid}</pre>
+          <pre className="code-block">
+            {architecture.mermaid}
+          </pre>
         </div>
       )}
 
       {explanation && (
         <div className="ai-card">
-          <div className="eyebrow">ARCHLENS AI</div>
+          <div className="eyebrow">
+            ARCHLENS AI
+          </div>
 
-          <h3>Architecture explanation</h3>
+          <h3>
+            Architecture explanation
+          </h3>
 
           <div className="ai-text">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+            >
               {explanation}
             </ReactMarkdown>
           </div>
@@ -347,19 +504,24 @@ export default function ArchitectureWorkspace({
 
       <div className="ask-card">
         <div>
-          <div className="eyebrow">CODEBASE Q&A</div>
+          <div className="eyebrow">
+            CODEBASE Q&A
+          </div>
 
           <h3>Ask ArchLens</h3>
 
           <p>
-            Ask questions using only the analyzed architecture evidence.
+            Ask questions using only the analyzed
+            architecture evidence.
           </p>
         </div>
 
         <div className="ask-row">
           <input
             value={question}
-            onChange={(event) => setQuestion(event.target.value)}
+            onChange={(event) =>
+              setQuestion(event.target.value)
+            }
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 ask();
@@ -373,13 +535,17 @@ export default function ArchitectureWorkspace({
             onClick={ask}
             disabled={busy === "ask"}
           >
-            {busy === "ask" ? "Thinking…" : "Ask"}
+            {busy === "ask"
+              ? "Thinking…"
+              : "Ask"}
           </button>
         </div>
 
         {answer && (
           <div className="answer">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+            >
               {answer}
             </ReactMarkdown>
           </div>
@@ -392,12 +558,20 @@ export default function ArchitectureWorkspace({
 function Stat({
   value,
   label,
+  warning = false,
 }: {
   value: number;
   label: string;
+  warning?: boolean;
 }) {
   return (
-    <div className="stat-card">
+    <div
+      className={
+        warning
+          ? "stat-card warning"
+          : "stat-card"
+      }
+    >
       <strong>{value}</strong>
       <span>{label}</span>
     </div>

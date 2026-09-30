@@ -115,7 +115,7 @@ button {
   padding: 9px 13px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(255,255,255,.025);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .status-dot {
@@ -178,7 +178,7 @@ button {
   padding: 12px 17px;
   border: 1px solid var(--border);
   font-weight: 700;
-  transition: .2s ease;
+  transition: 0.2s ease;
 }
 
 .primary-button {
@@ -192,17 +192,17 @@ button {
 }
 
 .secondary-button {
-  background: rgba(255,255,255,.04);
+  background: rgba(255, 255, 255, 0.04);
   color: white;
 }
 
 .secondary-button:hover {
-  background: rgba(255,255,255,.08);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .primary-button:disabled,
 .secondary-button:disabled {
-  opacity: .55;
+  opacity: 0.55;
   cursor: wait;
 }
 
@@ -231,8 +231,8 @@ button {
   max-width: 760px;
   margin: 20px auto 0;
   padding: 13px 15px;
-  border: 1px solid rgba(248, 113, 113, .25);
-  background: rgba(127, 29, 29, .15);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  background: rgba(127, 29, 29, 0.15);
   color: #fca5a5;
   border-radius: 12px;
   text-align: left;
@@ -297,7 +297,7 @@ button {
 
 .pipeline-card {
   border: 1px solid var(--border);
-  background: rgba(255,255,255,.02);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 16px;
   padding: 22px;
 }
@@ -361,9 +361,10 @@ button {
 .stat-card {
   min-width: 120px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,.025);
+  background: rgba(255, 255, 255, 0.025);
   border-radius: 12px;
   padding: 14px 17px;
+  transition: 0.2s ease;
 }
 
 .stat-card strong,
@@ -380,7 +381,84 @@ button {
   color: #69717d;
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
+}
+
+/* Surprise challenge: issue stats */
+
+.stat-card.warning {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(127, 29, 29, 0.12);
+}
+
+.stat-card.warning strong {
+  color: #fca5a5;
+}
+
+.stat-card.warning span {
+  color: #b98b8b;
+}
+
+/* Surprise challenge: issue detection banner */
+
+.issue-banner {
+  margin: 10px 0 20px;
+  padding: 18px 20px;
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(127, 29, 29, 0.18),
+      rgba(120, 53, 15, 0.08)
+    );
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.issue-banner h3 {
+  margin: 7px 0 5px;
+  font-size: 15px;
+}
+
+.issue-banner p {
+  margin: 0;
+  max-width: 720px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.issue-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.issue-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.issue-pill.cycle {
+  color: #fca5a5;
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+}
+
+.issue-pill.dead {
+  color: #fcd34d;
+  background: rgba(217, 119, 6, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
 }
 
 .tabs {
@@ -406,7 +484,7 @@ button {
 
 .tab.active {
   color: #fff;
-  background: rgba(255,255,255,.08);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .panel-stack {
@@ -494,18 +572,35 @@ button {
 .severity {
   font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: .1em;
+  letter-spacing: 0.1em;
   padding: 5px 7px;
   border-radius: 999px;
   border: 1px solid var(--border);
 }
 
-.type-badge.api { color: #93c5fd; }
-.type-badge.service { color: #c4b5fd; }
-.type-badge.database { color: #86efac; }
-.type-badge.model { color: #fcd34d; }
-.type-badge.middleware { color: #f9a8d4; }
-.type-badge.utility { color: #7dd3fc; }
+.type-badge.api {
+  color: #93c5fd;
+}
+
+.type-badge.service {
+  color: #c4b5fd;
+}
+
+.type-badge.database {
+  color: #86efac;
+}
+
+.type-badge.model {
+  color: #fcd34d;
+}
+
+.type-badge.middleware {
+  color: #f9a8d4;
+}
+
+.type-badge.utility {
+  color: #7dd3fc;
+}
 
 .file-count {
   color: #626a76;
@@ -555,7 +650,7 @@ button {
   justify-content: space-between;
   gap: 10px;
   padding: 7px 0;
-  border-bottom: 1px solid rgba(255,255,255,.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .file-row span {
@@ -575,7 +670,7 @@ button {
   gap: 12px;
   align-items: center;
   padding: 11px 0;
-  border-bottom: 1px solid rgba(255,255,255,.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .dependency-row span {
@@ -589,12 +684,12 @@ button {
 
 .severity.high {
   color: #fca5a5;
-  border-color: rgba(248,113,113,.25);
+  border-color: rgba(248, 113, 113, 0.25);
 }
 
 .severity.medium {
   color: #fcd34d;
-  border-color: rgba(252,211,77,.25);
+  border-color: rgba(252, 211, 77, 0.25);
 }
 
 .evidence {
@@ -611,7 +706,7 @@ button {
   font-size: 10px;
   color: #9ba3ae;
   text-transform: uppercase;
-  letter-spacing: .1em;
+  letter-spacing: 0.1em;
 }
 
 .empty-panel {
@@ -694,7 +789,8 @@ footer {
   .repo-form,
   .workspace-head,
   .results-bar,
-  .method-note {
+  .method-note,
+  .issue-banner {
     flex-direction: column;
     align-items: stretch;
   }
@@ -720,5 +816,9 @@ footer {
 
   .dependency-row {
     grid-template-columns: 1fr;
+  }
+
+  .issue-summary {
+    justify-content: flex-start;
   }
 }

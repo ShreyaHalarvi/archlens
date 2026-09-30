@@ -67,6 +67,11 @@ export type ArchitectureMetrics = {
   mediumRiskCount: number;
 };
 
+export type ArchitectureIssues = {
+  circularDependencies: string[][];
+  deadFiles: string[];
+};
+
 export type ArchitectureHealth = {
   score: number;
   summary: string;
@@ -82,6 +87,7 @@ export type Architecture = {
   health: ArchitectureHealth;
   risks: ArchitectureRisk[];
   metrics: ArchitectureMetrics;
+  issues: ArchitectureIssues;
   files: AnalyzedFile[];
   dependencies: Dependency[];
   languages: Record<string, number>;
